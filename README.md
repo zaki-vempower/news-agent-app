@@ -25,7 +25,8 @@ A modern Next.js application that aggregates news from multiple sources and prov
 - **Database**: SQLite with Prisma ORM
 - **Authentication**: NextAuth.js with credential-based auth
 - **AI**: OpenAI GPT-4 with intelligent fallbacks
-- **News APIs**: NewsAPI.org, GNews.io
+- **News Sources**: NewsAPI.org, GNews.io (API-based aggregation)
+- **Content Scraping**: Puppeteer (individual article content only)
 - **Performance**: Custom debouncing, memoization, optimized state management
 - **Icons**: Lucide React
 
@@ -93,11 +94,12 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 - **Session Management**: Persistent login sessions
 
 ### 📰 News Tab
-- **Multi-Source Aggregation**: Real-time news from NewsAPI and GNews
+- **API-Based Aggregation**: Real-time news from NewsAPI and GNews APIs (no web scraping for news lists)
 - **Smart Category Filtering**: Choose from 9+ categories with instant filtering
 - **Optimized Search**: Debounced search (500ms delay) prevents UI stuttering
 - **Infinite Scroll**: Smooth loading with throttled scroll events
 - **Article Management**: Save articles to your personal collection
+- **Full Content Scraping**: Puppeteer-powered content extraction for individual articles
 - **Performance**: Memoized filtering and optimized API calls
 
 ### 💬 AI Chat Tab (Authenticated Users)
@@ -122,6 +124,28 @@ This application includes several performance enhancements:
 - **Throttled Scrolling**: Smooth infinite scroll with 100ms throttling
 - **Optimized State Management**: Efficient useEffect dependency arrays
 - **Smart API Calls**: Reduced from 10-20 calls per search to 1 call per search
+
+## 🏗️ News Aggregation Architecture
+
+**NewsBot uses a hybrid approach for optimal performance:**
+
+### 📊 News Lists (API-Based)
+- **Primary**: NewsAPI.org (1,000 free requests/day)
+- **Fallback**: GNews.io (100 free requests/day)
+- **Benefits**: Fast, reliable, structured data with metadata
+- **Usage**: Headlines, summaries, categories, publication dates
+
+### 📄 Article Content (Puppeteer Scraping)
+- **When**: User requests full article content ("Read More")
+- **How**: Puppeteer navigates to original article URL
+- **What**: Extracts full text, images, author, publish date
+- **Benefits**: Complete content access while respecting rate limits
+
+This architecture provides the **best of both worlds**:
+- ⚡ Fast news list loading via APIs
+- 📖 Complete article access via smart scraping
+- 💰 Cost-effective (mostly free tier usage)
+- 🚀 Excellent user experience
 
 ## 🔧 Configuration
 
@@ -188,6 +212,7 @@ src/
 │   │   │   ├── route.ts                  # Session management
 │   │   │   └── [id]/route.ts             # Individual session operations
 │   │   ├── news/route.ts                 # News aggregation API
+│   │   ├── scrape-article/route.ts       # Individual article content scraping
 │   │   └── saved-articles/route.ts       # User saved articles
 │   ├── auth/
 │   │   ├── signin/page.tsx               # Sign in page
@@ -207,8 +232,8 @@ src/
 │   ├── auth.ts                           # NextAuth configuration
 │   ├── chatbot.ts                        # OpenAI integration
 │   ├── db.ts                             # Prisma database client
-│   ├── newsAPI.ts                        # News API integrations
-│   └── scraper.ts                        # Web scraping utilities
+│   ├── newsAPI.ts                        # News API integrations (NewsAPI, GNews)
+│   └── scraper.ts                        # Article content scraping with Puppeteer
 └── types/
     └── next-auth.d.ts                    # NextAuth type extensions
 ```

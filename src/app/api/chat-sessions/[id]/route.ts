@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 // GET - Fetch a specific chat session
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { id } = await params;
+    const session = await getServerSession(authOptions) as { user?: { email?: string } } | null;
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,7 +26,7 @@ export async function GET(
 
     const chatSession = await prisma.chatSession.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id 
       },
       include: {
@@ -49,10 +50,11 @@ export async function GET(
 // PUT - Update chat session (title, set as active)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { id } = await params;
+    const session = await getServerSession(authOptions) as { user?: { email?: string } } | null;
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -78,7 +80,7 @@ export async function PUT(
 
     const chatSession = await prisma.chatSession.update({
       where: { 
-        id: params.id,
+        id: id,
       },
       data: {
         ...(title && { title }),
@@ -102,10 +104,11 @@ export async function PUT(
 // DELETE - Delete a chat session
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { id } = await params;
+    const session = await getServerSession(authOptions) as { user?: { email?: string } } | null;
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -121,7 +124,7 @@ export async function DELETE(
 
     await prisma.chatSession.delete({
       where: { 
-        id: params.id,
+        id: id,
       },
     });
 

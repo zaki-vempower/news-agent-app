@@ -1,4 +1,3 @@
-import { NextAuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import GitHubProvider from "next-auth/providers/github"
 import CredentialsProvider from "next-auth/providers/credentials"
@@ -12,7 +11,7 @@ interface UserWithPassword {
   password: string | null;
 }
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   // adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
@@ -69,7 +68,8 @@ export const authOptions: NextAuthOptions = {
     ] : []),
   ],
   callbacks: {
-    async session({ session, token }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }: any) {
       if (session.user && token.sub) {
         return {
           ...session,
@@ -81,7 +81,8 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
-    async jwt({ token, user }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user }: any) {
       if (user) {
         token.sub = user.id;
       }
@@ -89,7 +90,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   session: {
-    strategy: "jwt",
+    strategy: "jwt" as const,
   },
   pages: {
     signIn: "/auth/signin",

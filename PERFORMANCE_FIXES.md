@@ -1,4 +1,4 @@
-# Performance Fixes Summary
+# Performance Fixes & Architecture Improvements Summary
 
 ## Issues Fixed
 
@@ -27,7 +27,15 @@
 - Improved session loading with useCallback optimization
 - Fixed message persistence after each chat interaction
 
-### ✅ 4. General Performance Optimizations
+### ✅ 4. News Aggregation Architecture Overhaul
+**Problem**: Puppeteer was being used for news list scraping, causing performance issues
+**Solution**:
+- **Removed Puppeteer from news list generation** - Now uses API-based aggregation only
+- **Refactored scraper.ts** - Now focused on individual article content scraping only
+- **Hybrid Architecture**: Fast API-based news lists + Puppeteer for full article content
+- **New API Endpoint**: `/api/scrape-article` for individual article content extraction
+
+### ✅ 5. General Performance Optimizations
 **Solutions Applied**:
 - Added throttling to infinite scroll (100ms delay)
 - Memoized filtered articles calculation
@@ -35,6 +43,7 @@
 - Separated initial load from dynamic fetching
 - Added proper cleanup for event listeners
 - Fixed TypeScript compilation errors
+- Removed unnecessary backup files
 
 ## Technical Implementation Details
 

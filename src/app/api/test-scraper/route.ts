@@ -1,28 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { newsScraper } from '@/lib/scraper';
+import { articleContentScraper } from '@/lib/scraper';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Testing scraper with a single source...');
+    const { searchParams } = new URL(request.url);
+    const url = searchParams.get('url');
     
-    // Get news articles
-    const articles = await newsScraper.getLatestNews();
+    if (!url) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'URL parameter is required',
+          usage: 'Use ?url=<article_url> to test article content scraping'
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log(`Testing article content scraper for URL: ${url}`);
     
-    console.log(`Retrieved ${articles.length} articles`);
+    // Get article content
+    const articleContent = await articleContentScraper.scrapeArticleContent(url);
+    
+    console.log(`Retrieved article content (${articleContent.content.length} characters)`);
     
     return NextResponse.json({
       success: true,
-      count: articles.length,
-      articles: articles.slice(0, 5) // Return first 5 for testing
+      url,
+      content: articleContent
     });
     
   } catch (error) {
-    console.error('Error in test scraper:', error);
+    console.error('Error in test article scraper:', error);
     return NextResponse.json(
       { 
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        articles: []
+        error: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
