@@ -66,20 +66,20 @@ export default function FeaturedNewsCard({
       
       {/* Breaking/Trending Badge */}
       {(isBreaking || isTrending) && (
-        <div className={`absolute top-6 left-6 z-20 flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-sm shadow-lg ${
+        <div className={`absolute top-4 left-4 z-30 flex items-center space-x-2 px-4 py-2.5 rounded-full font-bold text-sm shadow-xl border-2 text-shadow ${
           isBreaking 
-            ? 'bg-gradient-to-r from-red-500 to-red-600 text-white animate-pulse' 
-            : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white'
+            ? 'bg-red-600 border-red-700 text-white shadow-red-500/50' 
+            : 'bg-orange-500 border-orange-600 text-white shadow-orange-500/50'
         }`}>
           {isBreaking ? (
             <>
-              <AlertCircle className="h-4 w-4" />
-              <span>BREAKING</span>
+              <AlertCircle className="h-4 w-4 flex-shrink-0 drop-shadow" />
+              <span className="font-extrabold tracking-wide text-white text-shadow">BREAKING</span>
             </>
           ) : (
             <>
-              <TrendingUp className="h-4 w-4" />
-              <span>TRENDING</span>
+              <TrendingUp className="h-4 w-4 flex-shrink-0 drop-shadow" />
+              <span className="font-extrabold tracking-wide text-white text-shadow">TRENDING</span>
             </>
           )}
         </div>
@@ -89,10 +89,10 @@ export default function FeaturedNewsCard({
       {onToggleSelection && (
         <button
           onClick={onToggleSelection}
-          className={`absolute top-6 right-6 z-20 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-200 backdrop-blur-sm ${
+          className={`absolute top-4 right-4 z-30 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-200 backdrop-blur-sm ${
             isSelected 
-              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-600 text-white shadow-lg shadow-blue-500/40' 
-              : 'bg-white/90 border-gray-300 hover:border-blue-400 hover:shadow-md'
+              ? 'bg-blue-600 border-blue-700 text-white shadow-lg shadow-blue-500/50' 
+              : 'bg-white/95 border-gray-300 hover:border-blue-400 hover:shadow-md text-gray-600'
           }`}
         >
           {isSelected && <Check className="h-4 w-4" />}
@@ -119,8 +119,8 @@ export default function FeaturedNewsCard({
           
           {/* Category Badge */}
           {article.category && (
-            <div className="absolute bottom-4 left-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm px-4 py-2 rounded-full font-medium shadow-lg backdrop-blur-sm">
-              {article.category}
+            <div className="absolute bottom-4 left-4 bg-blue-600 border-2 border-blue-700 text-white text-sm px-4 py-2 rounded-full font-bold shadow-xl z-20">
+              {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
             </div>
           )}
           
@@ -131,25 +131,25 @@ export default function FeaturedNewsCard({
         {/* Content Section */}
         <div className="lg:w-1/2 p-8 flex flex-col justify-between">
           <div>
-            <h2 className="font-bold text-gray-900 text-2xl lg:text-3xl mb-4 leading-tight group-hover:text-blue-600 transition-colors">
+            <h2 className="font-bold text-gray-900 text-2xl lg:text-3xl mb-4 leading-tight group-hover:text-blue-600 transition-colors text-shadow-sm">
               {article.title}
             </h2>
             
             {article.summary && (
-              <p className="text-gray-600 text-base lg:text-lg mb-6 line-clamp-4 leading-relaxed">
+              <p className="text-gray-700 text-base lg:text-lg mb-6 line-clamp-4 leading-relaxed font-medium">
                 {article.summary}
               </p>
             )}
 
             {/* Metadata */}
-            <div className="flex items-center justify-between text-sm text-gray-500 mb-6">
-              <div className="flex items-center space-x-3 bg-gray-50 rounded-xl px-4 py-2">
-                <Globe className="h-4 w-4" />
-                <span className="font-medium">{article.source}</span>
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-6">
+              <div className="flex items-center space-x-3 bg-gray-100 rounded-xl px-4 py-2 border border-gray-200">
+                <Globe className="h-4 w-4 text-gray-500" />
+                <span className="font-semibold text-gray-700">{article.source}</span>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 text-gray-500">
                 <Calendar className="h-4 w-4" />
-                <span>{timeAgo}</span>
+                <span className="font-medium">{timeAgo}</span>
               </div>
             </div>
           </div>

@@ -1,8 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Bot, User, Loader, MessageCircle, Tag, Plus, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { 
+  useChatSessions, 
+  useChatSession, 
+  useCreateChatSession, 
+  useSendMessage,
+  useUpdateChatSession,
+  useDeleteChatSession
+} from '../hooks/useApi';
 
 interface NewsArticle {
   id: string;
@@ -17,22 +25,6 @@ interface NewsArticle {
   scrapedAt: string;
 }
 
-interface ChatMessage {
-  id: string;
-  content: string;
-  isUser: boolean;
-  timestamp: Date;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  isActive: boolean;
-  updatedAt: string;
-  messages: ChatMessage[];
-  selectedArticles?: string; // JSON string of selected articles
-}
-
 interface ChatBotProps {
   articles: NewsArticle[];
   selectedArticles?: NewsArticle[];
@@ -40,14 +32,32 @@ interface ChatBotProps {
 
 export default function ChatBot({ articles, selectedArticles = [] }: ChatBotProps) {
   const { data: session } = useSession();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  
+  // React Query hooks
+  const { data: sessions = [], isLoading: loadingSessions } = useChatSessions();
+  const createChatSessionMutation = useCreateChatSession();
+  const sendMessageMutation = useSendMessage();
+  const updateChatSessionMutation = useUpdateChatSession();
+  const deleteChatSessionMutation = useDeleteChatSession();
+  
+  // Local state
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessionSelectedArticles, setSessionSelectedArticles] = useState<NewsArticle[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [loadingSessions, setLoadingSessions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Get active session data
+  const { data: activeSessionData } = useChatSession(activeSessionId || '');
+  const activeSession = activeSessionData || null;
+  const messages = useMemo(() => {
+    if (!activeSession?.messages) return [];
+    return activeSession.messages.map(msg => ({
+      ...msg,
+      timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
+    }));
+  }, [activeSession?.messages]);
+  const loading = sendMessageMutation.isPending || createChatSessionMutation.isPending || 
+                 updateChatSessionMutation.isPending || deleteChatSessionMutation.isPending;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,265 +67,111 @@ export default function ChatBot({ articles, selectedArticles = [] }: ChatBotProp
     scrollToBottom();
   }, [messages]);
 
-  // Load chat sessions for authenticated users
-  const loadChatSessions = useCallback(async () => {
+  // Set active session from sessions data
+  useEffect(() => {
+    if (sessions.length > 0 && !activeSessionId) {
+      const activeSessionInList = sessions.find(s => s.isActive);
+      if (activeSessionInList) {
+        setActiveSessionId(activeSessionInList.id);
+        // Parse and set session's selected articles
+        const storedSelectedArticles = activeSessionInList.selectedArticles 
+          ? JSON.parse(activeSessionInList.selectedArticles) 
+          : [];
+        setSessionSelectedArticles(storedSelectedArticles);
+      }
+    }
+  }, [sessions, activeSessionId]);
+
+  const createNewSession = () => {
     if (!session?.user) return;
+
+    // Generate a more descriptive title
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString();
     
-    setLoadingSessions(true);
-    try {
-      const response = await fetch('/api/chat-sessions');
-      if (response.ok) {
-        const sessionsData = await response.json();
-        setSessions(sessionsData);
-        
-        // Load active session if exists
-        const activeSessionData = sessionsData.find((s: ChatSession) => s.isActive);
-        if (activeSessionData) {
-          setActiveSession(activeSessionData);
-          
-          // Parse and set session's selected articles
-          const storedSelectedArticles = activeSessionData.selectedArticles 
-            ? JSON.parse(activeSessionData.selectedArticles) 
-            : [];
-          setSessionSelectedArticles(storedSelectedArticles);
-          
-          setMessages(activeSessionData.messages.map((msg: ChatMessage) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          })));
-        }
+    createChatSessionMutation.mutate({
+      title: `Chat Session - ${dateStr} ${timeStr}`,
+      message: '', // Will be filled in by the welcome message
+      selectedArticles: selectedArticles.length > 0 ? selectedArticles : undefined
+    }, {
+      onSuccess: (newSession) => {
+        setActiveSessionId(newSession.id);
+        setSessionSelectedArticles(selectedArticles);
       }
-    } catch (error) {
-      console.error('Error loading chat sessions:', error);
-    } finally {
-      setLoadingSessions(false);
-    }
-  }, [session?.user]);
-
-  useEffect(() => {
-    loadChatSessions();
-  }, [loadChatSessions]);
-
-  // Set welcome message for new sessions
-  useEffect(() => {
-    if (!activeSession && messages.length === 0) {
-      const articlesForChat = sessionSelectedArticles.length > 0 ? sessionSelectedArticles : [];
-      const welcomeMessage = articlesForChat.length > 0 
-        ? `Hello! I'm NewsBot, your AI assistant. You have ${articlesForChat.length} article${articlesForChat.length !== 1 ? 's' : ''} selected for focused discussion:
-
-${articlesForChat.map((article, index) => `${index + 1}. "${article.title}" (${article.source})`).join('\n')}
-
-I can answer specific questions about these selected articles, summarize them, compare different perspectives, or discuss any topics they cover. What would you like to know?`
-        : `Hello! I'm NewsBot, your AI assistant for the latest news. I can answer questions about all ${articles.length} current news articles, or you can select specific articles from the news tab to focus our conversation.
-
-Try asking me about:
-• Climate change and environmental news
-• Technology and AI developments  
-• Economic and trade updates
-• Space exploration missions
-• Or any other news topics you're curious about!
-
-What would you like to know?`;
-
-      setMessages([{
-        id: Date.now().toString(),
-        content: welcomeMessage,
-        isUser: false,
-        timestamp: new Date()
-      }]);
-    }
-  }, [articles.length, sessionSelectedArticles, activeSession, messages.length]);
-
-  const createNewSession = async () => {
-    if (!session?.user) return;
-
-    try {
-      // Generate a more descriptive title
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const dateStr = now.toLocaleDateString();
-      
-      const response = await fetch('/api/chat-sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `Chat Session - ${dateStr} ${timeStr}`,
-          selectedArticles: selectedArticles.length > 0 ? selectedArticles : null
-        })
-      });
-
-      if (response.ok) {
-        const newSession = await response.json();
-        // Clear current session first, then set new one as active
-        setSessions(prev => [newSession, ...prev.map(s => ({ ...s, isActive: false }))]);
-        setActiveSession(newSession);
-        setSessionSelectedArticles(selectedArticles); // Set current selection for new session
-        setMessages([]); // Clear messages to start fresh
-      }
-    } catch (error) {
-      console.error('Error creating new session:', error);
-    }
+    });
   };
 
-  const switchToSession = async (sessionId: string) => {
-    if (!session?.user || sessionId === activeSession?.id) return;
+  const switchToSession = (sessionId: string) => {
+    if (!session?.user || sessionId === activeSessionId) return;
 
-    try {
-      // Set session as active
-      const response = await fetch(`/api/chat-sessions/${sessionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: true })
-      });
-
-      if (response.ok) {
-        // Load session with messages
-        const sessionResponse = await fetch(`/api/chat-sessions/${sessionId}`);
-        if (sessionResponse.ok) {
-          const sessionData = await sessionResponse.json();
-          
-          // Clear current messages first to prevent mixing
-          setMessages([]);
-          
-          // Parse and set session's selected articles
-          const storedSelectedArticles = sessionData.selectedArticles 
-            ? JSON.parse(sessionData.selectedArticles) 
-            : [];
-          setSessionSelectedArticles(storedSelectedArticles);
-          
-          // Set new active session and its messages
-          setActiveSession(sessionData);
-          setMessages(sessionData.messages.map((msg: ChatMessage) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          })));
-          
-          // Update sessions list to reflect active state
-          setSessions(prev => prev.map(s => ({ 
-            ...s, 
-            isActive: s.id === sessionId 
-          })));
-        }
+    updateChatSessionMutation.mutate({
+      sessionId,
+      isActive: true
+    }, {
+      onSuccess: (sessionData) => {
+        setActiveSessionId(sessionId);
+        // Parse and set session's selected articles
+        const storedSelectedArticles = sessionData.selectedArticles 
+          ? JSON.parse(sessionData.selectedArticles) 
+          : [];
+        setSessionSelectedArticles(storedSelectedArticles);
       }
-    } catch (error) {
-      console.error('Error switching session:', error);
-    }
+    });
   };
 
-  const deleteSession = async (sessionId: string) => {
+  const deleteSession = (sessionIdToDelete: string) => {
     if (!session?.user) return;
 
-    try {
-      const response = await fetch(`/api/chat-sessions/${sessionId}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        // Remove session from list
-        setSessions(prev => prev.filter(s => s.id !== sessionId));
-        
-        // If we're deleting the active session, clear it and messages
-        if (activeSession?.id === sessionId) {
-          setActiveSession(null);
-          setMessages([]);
-          setSessionSelectedArticles([]);
-          
-          // If there are other sessions, optionally activate the most recent one
-          const remainingSessions = sessions.filter(s => s.id !== sessionId);
+    deleteChatSessionMutation.mutate(sessionIdToDelete, {
+      onSuccess: () => {
+        // If we're deleting the active session, clear it and switch to most recent
+        if (sessionIdToDelete === activeSessionId) {
+          const remainingSessions = sessions.filter(s => s.id !== sessionIdToDelete);
           if (remainingSessions.length > 0) {
             const mostRecent = remainingSessions.sort((a, b) => 
               new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
             )[0];
-            // Auto-switch to most recent session
+            // Switch to most recent session
             setTimeout(() => switchToSession(mostRecent.id), 100);
+          } else {
+            // No more sessions, clear active session
+            setActiveSessionId(null);
+            setSessionSelectedArticles([]);
           }
         }
       }
-    } catch (error) {
-      console.error('Error deleting session:', error);
-    }
+    });
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = () => {
     if (!inputMessage.trim() || loading) return;
 
     const userMessage = inputMessage.trim();
-    const userMessageObj = {
-      id: Date.now().toString(),
-      content: userMessage,
-      isUser: true,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessageObj]);
     setInputMessage('');
-    setLoading(true);
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          message: userMessage,
-          selectedArticles: sessionSelectedArticles.length > 0 ? sessionSelectedArticles : undefined,
-          sessionId: activeSession?.id
-        }),
+    if (activeSessionId) {
+      // Send message to existing session
+      sendMessageMutation.mutate({
+        sessionId: activeSessionId,
+        message: userMessage,
+        selectedArticles: sessionSelectedArticles.length > 0 ? sessionSelectedArticles : undefined,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const botMessageObj = {
-          id: (Date.now() + 1).toString(),
-          content: data.response,
-          isUser: false,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, botMessageObj]);
-
-        // If a new session was created, update our state
-        if (data.sessionId && !activeSession) {
-          const newSession: ChatSession = {
-            id: data.sessionId,
-            title: `Chat ${new Date().toLocaleDateString()}`,
-            isActive: true,
-            updatedAt: new Date().toISOString(),
-            messages: []
-          };
-          setActiveSession(newSession);
-          setSessions(prev => [newSession, ...prev]);
+    } else if (session?.user) {
+      // Create new session with the message
+      createChatSessionMutation.mutate({
+        title: `Chat ${new Date().toLocaleDateString()}`,
+        message: userMessage,
+        selectedArticles: sessionSelectedArticles.length > 0 ? sessionSelectedArticles : undefined
+      }, {
+        onSuccess: (newSession) => {
+          setActiveSessionId(newSession.id);
+          setSessionSelectedArticles(selectedArticles);
         }
-
-        // Update session in the sessions list with new message count
-        if (activeSession || data.sessionId) {
-          const sessionId = activeSession?.id || data.sessionId;
-          setSessions(prev => prev.map(s => 
-            s.id === sessionId 
-              ? { ...s, updatedAt: new Date().toISOString() }
-              : s
-          ));
-        }
-      } else {
-        const errorMessage = {
-          id: (Date.now() + 1).toString(),
-          content: "Sorry, I'm having trouble responding right now. Please try again later.",
-          isUser: false,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        content: "Sorry, I encountered an error. Please try again.",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setLoading(false);
+      });
+    } else {
+      // Guest user - would need separate handling or redirect to sign in
+      console.log('Guest users need to sign in to chat');
     }
   };
 

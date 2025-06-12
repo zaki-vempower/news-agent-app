@@ -115,96 +115,133 @@ export class NewsAPIService {
     }
   }
 
-  // private async fetchFromNewsAPI(
-  //   category: string, 
-  //   country: string, 
-  //   page: number, 
-  //   pageSize: number
-  // ): Promise<NewsAPIArticle[]> {
-  //   try {
-  //     const params = new URLSearchParams({
-  //       country,
-  //       pageSize: pageSize.toString(),
-  //       page: page.toString(),
-  //       apiKey: this.NEWS_API_KEY!
-  //     });
-
-  //     if (category && category !== 'all') {
-  //       // Map our categories to NewsAPI categories
-  //       const categoryMap: Record<string, string> = {
-  //         'technology': 'technology',
-  //         'business': 'business', 
-  //         'health': 'health',
-  //         'science': 'science',
-  //         'sports': 'sports',
-  //         'entertainment': 'entertainment',
-  //         'general': 'general'
-  //       };
-        
-  //       const newsAPICategory = categoryMap[category.toLowerCase()] || 'general';
-  //       params.append('category', newsAPICategory);
-  //     }
-
-  //     const response = await fetch(`${this.NEWS_API_BASE_URL}/top-headlines?${params}`);
-      
-  //     if (!response.ok) {
-  //       console.warn(`NewsAPI failed with status ${response.status}: ${response.statusText}`);
-  //       return [];
-  //     }
-
-  //     const data: NewsAPIResponse = await response.json();
-  //     return data.articles || [];
-  //   } catch (error) {
-  //     console.warn('NewsAPI fetch failed:', error);
-  //     return [];
-  //   }
-  // }
-
-  private async fetchFromNewsAPI(
-  category: string,
-  country: string,
-  page: number,
-  pageSize: number
-): Promise<NewsAPIArticle[]> {
-  try {
-    const params = new URLSearchParams({
-      country,
-      pageSize: pageSize.toString(),
-      page: page.toString(),
-      apiKey: this.NEWS_API_KEY!
-    });
-
-    // Only add category if it’s not 'all'
-    if (category && category.toLowerCase() !== 'all') {
-      const categoryMap: Record<string, string> = {
-        'technology': 'technology',
-        'business': 'business',
-        'health': 'health',
-        'science': 'science',
-        'sports': 'sports',
-        'entertainment': 'entertainment',
-        'general': 'general'
-      };
-
-      const newsAPICategory = categoryMap[category.toLowerCase()] || 'general';
-      params.append('category', newsAPICategory);
-    }
-
-    const url = `${this.NEWS_API_BASE_URL}/top-headlines?${params}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      console.warn(`NewsAPI failed with status ${response.status}: ${response.statusText}`);
+  // Method to search news using /everything endpoint - for comprehensive news search
+  async searchNews(
+    query: string,
+    page: number,
+    pageSize: number,
+    language: string = 'en',
+    sortBy: string = 'publishedAt'
+  ): Promise<NewsAPIArticle[]> {
+    if (!this.NEWS_API_KEY) {
+      console.warn('NewsAPI key not available for searchNews.');
       return [];
     }
+    let requestUrl = '';
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        pageSize: pageSize.toString(),
+        page: page.toString(),
+        language: language,
+        sortBy: sortBy,
+        apiKey: this.NEWS_API_KEY!,
+      });
+      requestUrl = `${this.NEWS_API_BASE_URL}/everything?${params.toString()}`;
+      console.log(`NewsAPI Search Request URL: ${requestUrl}`);
 
-    const data: NewsAPIResponse = await response.json();
-    return data.articles || [];
-  } catch (error) {
-    console.warn('NewsAPI fetch failed:', error);
-    return [];
+      const response = await fetch(requestUrl);
+      if (!response.ok) {
+        let errorBody = '';
+        try {
+          errorBody = await response.text();
+        } catch {
+          // ignore if text extraction fails
+        }
+        console.warn(`NewsAPI search failed with status ${response.status}: ${response.statusText}. URL: ${requestUrl}. Body: ${errorBody}`);
+        return [];
+      }
+      const data: NewsAPIResponse = await response.json();
+      return (data.articles || []).map(article => ({
+        ...article,
+        category: article.category || 'general' 
+      }));
+    } catch (error) {
+      let errorMessage = 'Unknown error during NewsAPI search';
+      if (error instanceof Error) {
+          errorMessage = error.message;
+      }
+      console.warn(`NewsAPI search failed: ${errorMessage}. URL attempted: ${requestUrl || 'N/A'}. Error: ${error instanceof Error ? error.stack : String(error)}`);
+      return [];
+    }
   }
-}
+
+  private async fetchFromNewsAPI(
+    category: string,
+    country: string, 
+    page: number,
+    pageSize: number
+  ): Promise<NewsAPIArticle[]> {
+    let requestUrl = ''; 
+    try {
+      const commonParams: Record<string, string> = {
+        pageSize: pageSize.toString(),
+        page: page.toString(),
+        apiKey: this.NEWS_API_KEY!, 
+      };
+
+      const params = new URLSearchParams(commonParams);
+
+      if (!category || category.toLowerCase() === 'all') {
+        // 🔍 Use /everything for latest comprehensive news (as recommended)
+        // This gets the absolute latest news from all sources, sorted by publishedAt
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        params.append('q', 'breaking OR latest OR news OR headlines OR "current events" OR international OR world OR national');
+        params.append('sortBy', 'publishedAt'); // Sort by newest first
+        params.append('language', 'en');
+        params.append('from', yesterday.toISOString()); // Only last 24 hours for freshness
+        requestUrl = `${this.NEWS_API_BASE_URL}/everything?${params.toString()}`;
+        console.log('✅ Using /everything for latest comprehensive news');
+      } else {
+        // ✅ Use /top-headlines for category-specific breaking news (as recommended)
+        // This gets the most recent and relevant headlines for specific categories
+        params.append('country', country);
+        
+        const categoryMap: Record<string, string> = {
+          'technology': 'technology',
+          'business': 'business', 
+          'health': 'health',
+          'science': 'science',
+          'sports': 'sports',
+          'entertainment': 'entertainment',
+          'general': 'general'
+        };
+        const newsAPICategory = categoryMap[category.toLowerCase()] || category.toLowerCase(); 
+        params.append('category', newsAPICategory);
+        requestUrl = `${this.NEWS_API_BASE_URL}/top-headlines?${params.toString()}`;
+        console.log(`✅ Using /top-headlines for category: ${newsAPICategory}`);
+      }
+
+      console.log(`NewsAPI Request URL: ${requestUrl}`);
+      const response = await fetch(requestUrl);
+
+      if (!response.ok) {
+        let errorBody = '';
+        try {
+          errorBody = await response.text();
+        } catch {
+          // ignore if text extraction fails
+        }
+        console.warn(`NewsAPI failed with status ${response.status}: ${response.statusText}. URL: ${requestUrl}. Body: ${errorBody}`);
+        return [];
+      }
+
+      const data: NewsAPIResponse = await response.json();
+      
+      // Ensure articles have a category field, especially for those from /everything
+      return (data.articles || []).map(article => ({
+        ...article,
+        category: article.category || (category && category.toLowerCase() !== 'all' ? category : 'general') 
+      }));
+    } catch (error) {
+      let errorMessage = 'Unknown error during NewsAPI fetch';
+      if (error instanceof Error) {
+          errorMessage = error.message;
+      }
+      console.warn(`NewsAPI fetch failed: ${errorMessage}. URL attempted: ${requestUrl || 'N/A'}. Error: ${error instanceof Error ? error.stack : String(error)}`);
+      return [];
+    }
+  }
 
 
   private async fetchFromGNewsAPI(
@@ -452,70 +489,151 @@ export class NewsAPIService {
     return extendedArticles.slice(startIndex, endIndex);
   }
 
-  async searchNews(query: string, page: number = 1, pageSize: number = 20): Promise<NewsAPIArticle[]> {
-    try {
-      if (this.NEWS_API_KEY) {
-        const params = new URLSearchParams({
-          q: query,
-          pageSize: pageSize.toString(),
-          page: page.toString(),
-          sortBy: 'publishedAt',
-          apiKey: this.NEWS_API_KEY
-        });
+  // Fetch international breaking news from multiple countries
+  async fetchInternationalBreakingNews(pageSize: number = 15): Promise<NewsAPIArticle[]> {
+    if (!this.NEWS_API_KEY) {
+      console.warn('NewsAPI key not available for international breaking news.');
+      return [];
+    }
 
-        const response = await fetch(`${this.NEWS_API_BASE_URL}/everything?${params}`);
-        
-        if (response.ok) {
-          const data: NewsAPIResponse = await response.json();
-          return data.articles || [];
+    try {
+      const results: NewsAPIArticle[] = [];
+      
+      // Get breaking news from major countries
+      const countries = ['us', 'gb', 'ca', 'au', 'in', 'de', 'fr', 'jp'];
+      
+      for (const country of countries.slice(0, 4)) { // Limit to 4 countries to avoid rate limits
+        try {
+          const params = new URLSearchParams({
+            country: country,
+            category: 'general',
+            pageSize: '5',
+            apiKey: this.NEWS_API_KEY!
+          });
+          
+          const response = await fetch(`${this.NEWS_API_BASE_URL}/top-headlines?${params.toString()}`);
+          
+          if (response.ok) {
+            const data: NewsAPIResponse = await response.json();
+            const articles = (data.articles || []).map(article => ({
+              ...article,
+              category: article.category || 'international'
+            }));
+            results.push(...articles);
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch breaking news from ${country}:`, error);
         }
+        
+        if (results.length >= pageSize) break;
       }
 
-      // Fallback to Reddit search
-      const response = await fetch(
-        `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=new&limit=${pageSize}`,
-        {
-          headers: {
-            'User-Agent': 'NewsBot/1.0'
-          }
-        }
+      // Remove duplicates and return most recent
+      const uniqueArticles = results.filter((article, index, self) => 
+        index === self.findIndex(a => a.url === article.url)
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        const posts = data.data?.children || [];
-
-        return posts.map((post: { 
-          data: { 
-            title: string; 
-            selftext?: string; 
-            url: string; 
-            subreddit: string; 
-            created_utc: number; 
-            author: string; 
-            thumbnail?: string;
-          } 
-        }) => ({
-          title: post.data.title,
-          description: post.data.selftext?.substring(0, 200) || '',
-          content: post.data.selftext || 'Click to read the full article.',
-          url: post.data.url,
-          urlToImage: post.data.thumbnail !== 'self' ? post.data.thumbnail : undefined,
-          source: {
-            name: `Reddit r/${post.data.subreddit}`
-          },
-          author: post.data.author,
-          publishedAt: new Date(post.data.created_utc * 1000).toISOString(),
-          category: 'general'
-        })).slice(0, pageSize);
-      }
-
-      return [];
+      return uniqueArticles
+        .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+        .slice(0, pageSize);
     } catch (error) {
-      console.error('Error searching news:', error);
+      console.error('Error fetching international breaking news:', error);
       return [];
     }
   }
+
+  // Fetch the absolute latest news using /everything endpoint with comprehensive search
+  async fetchLatestEverything(pageSize: number = 20): Promise<NewsAPIArticle[]> {
+    if (!this.NEWS_API_KEY) {
+      console.warn('NewsAPI key not available for latest everything search.');
+      return [];
+    }
+
+    try {
+      // Get current date for recent news filtering
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      const params = new URLSearchParams({
+        q: 'breaking OR urgent OR latest OR developing OR "just in" OR news OR headlines OR international OR world',
+        language: 'en',
+        sortBy: 'publishedAt',
+        from: yesterday.toISOString(),
+        pageSize: pageSize.toString(),
+        apiKey: this.NEWS_API_KEY!
+      });
+
+      const requestUrl = `${this.NEWS_API_BASE_URL}/everything?${params.toString()}`;
+      console.log(`Latest Everything Request URL: ${requestUrl}`);
+
+      const response = await fetch(requestUrl);
+      
+      if (!response.ok) {
+        let errorBody = '';
+        try {
+          errorBody = await response.text();
+        } catch {
+          // ignore if text extraction fails
+        }
+        console.warn(`Latest everything fetch failed with status ${response.status}: ${response.statusText}. Body: ${errorBody}`);
+        return [];
+      }
+
+      const data: NewsAPIResponse = await response.json();
+      
+      return (data.articles || []).map(article => ({
+        ...article,
+        category: article.category || 'breaking'
+      }));
+    } catch (error) {
+      let errorMessage = 'Unknown error during latest everything fetch';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      console.warn(`Latest everything fetch failed: ${errorMessage}. Error: ${error instanceof Error ? error.stack : String(error)}`);
+      return [];
+    }
+  }
+
+  // Enhanced method to get comprehensive top stories combining multiple approaches
+  async fetchComprehensiveTopStories(pageSize: number = 30): Promise<NewsAPIArticle[]> {
+    try {
+      const allResults: NewsAPIArticle[] = [];
+
+      // 1. Get latest breaking news using /everything
+      const latestNews = await this.fetchLatestEverything(10);
+      allResults.push(...latestNews);
+
+      // 2. Get international breaking news using /top-headlines
+      const internationalNews = await this.fetchInternationalBreakingNews(10);
+      allResults.push(...internationalNews);
+
+      // 3. Get US top headlines for comparison
+      const usHeadlines = await this.fetchTopHeadlines({ 
+        category: '', 
+        country: 'us', 
+        pageSize: 10 
+      });
+      allResults.push(...usHeadlines);
+
+      // Remove duplicates based on URL and title similarity
+      const uniqueArticles = allResults.filter((article, index, self) => {
+        return index === self.findIndex(a => 
+          a.url === article.url || 
+          (a.title.toLowerCase().substring(0, 50) === article.title.toLowerCase().substring(0, 50))
+        );
+      });
+
+      // Sort by publication date (newest first) and return requested amount
+      return uniqueArticles
+        .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+        .slice(0, pageSize);
+    } catch (error) {
+      console.error('Error fetching comprehensive top stories:', error);
+      return [];
+    }
+  }
+
 }
 
 export const newsAPIService = new NewsAPIService();

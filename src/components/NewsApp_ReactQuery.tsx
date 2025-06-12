@@ -11,7 +11,6 @@ import DropdownMenu from './DropdownMenu';
 import { useDebounce } from '../hooks/useDebounce';
 import { 
   useNews, 
-  useNewsSearch, 
   useRefreshNews, 
   useSavedArticles, 
   useSaveArticle, 
@@ -51,7 +50,8 @@ export default function NewsApp() {
     data: newsData, 
     isLoading, 
     isError, 
-    error 
+    error,
+    isFetching
   } = useNews({
     category: selectedCategory,
     search: debouncedSearchQuery,
@@ -60,8 +60,7 @@ export default function NewsApp() {
   });
 
   const { 
-    data: savedArticlesData, 
-    isLoading: isSavedLoading 
+    data: savedArticlesData
   } = useSavedArticles();
 
   const refreshNewsMutation = useRefreshNews();
@@ -89,41 +88,10 @@ export default function NewsApp() {
     { value: 'Health', label: 'Health' }
   ];
 
-  // Filter articles by category - memoized to prevent unnecessary re-calculations
-  const filteredAndSearchedArticles = useMemo(() => {
-    let filtered = articles;
-    
-    // Apply category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(article => 
-        article.category?.toLowerCase() === selectedCategory.toLowerCase()
-      );
-    }
-    
-    // Apply search filter
-    if (debouncedSearchQuery.trim()) {
-      const query = debouncedSearchQuery.toLowerCase();
-      filtered = filtered.filter(article =>
-        article.title.toLowerCase().includes(query) ||
-        article.summary?.toLowerCase().includes(query) ||
-        article.content.toLowerCase().includes(query) ||
-        article.source.toLowerCase().includes(query)
-      );
-    }
-    
-    return filtered;
-  }, [articles, selectedCategory, debouncedSearchQuery]);
-
-  // Update filtered articles when the memoized result changes
-  useEffect(() => {
-    setFilteredArticles(filteredAndSearchedArticles);
-  }, [filteredAndSearchedArticles]);
-
-  // Handle category change - optimized to prevent stuttering
+  // Handle category change - reset page when changing category
   const handleCategoryChange = useCallback((category: string) => {
     setSelectedCategory(category);
     setCurrentPage(1);
-    setHasMore(true);
     setSearchQuery(''); // Clear search when changing category
   }, []);
 
@@ -156,12 +124,55 @@ export default function NewsApp() {
     return articles.filter(article => selectedArticles.has(article.id));
   };
 
+  // Handle saving/unsaving articles
+  const handleSaveToggle = async (articleId: string, shouldSave: boolean) => {
+    if (!session) return;
+
+    try {
+      if (shouldSave) {
+        const articleData = articles.find(a => a.id === articleId);
+        if (articleData) {
+          await saveArticleMutation.mutateAsync({ articleId, articleData });
+        }
+      } else {
+        await unsaveArticleMutation.mutateAsync(articleId);
+      }
+    } catch (error) {
+      console.error('Error toggling save:', error);
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    try {
+      await refreshNewsMutation.mutateAsync({
+        category: selectedCategory,
+        page: 1,
+        pageSize: 15
+      });
+      setCurrentPage(1);
+    } catch (error) {
+      console.error('Error refreshing news:', error);
+    }
+  };
+
+  // Handle search submit
+  const handleSearchSubmit = useCallback(() => {
+    setCurrentPage(1);
+  }, []);
+
+  // Load more news (for infinite scroll)
+  const loadMoreNews = useCallback(async () => {
+    if (!hasMore || isLoading) return;
+    setCurrentPage(prev => prev + 1);
+  }, [hasMore, isLoading]);
+
   // Determine featured articles (breaking news, trending)
   const getFeaturedArticles = useCallback(() => {
     const breakingKeywords = ['breaking', 'urgent', 'alert', 'developing', 'live', 'just in', 'protests', 'court', 'challenge'];
     const trendingKeywords = ['viral', 'trending', 'popular', 'major', 'massive', 'unprecedented', 'historic', 'record'];
     
-    return filteredArticles.map(article => {
+    return articles.map(article => {
       const titleLower = article.title.toLowerCase();
       const summaryLower = article.summary?.toLowerCase() || '';
       const contentLower = article.content.toLowerCase();
@@ -197,218 +208,12 @@ export default function NewsApp() {
         isTrending: isTrending && !isBreaking && !isPoliticalBreaking
       };
     });
-  }, [filteredArticles]);
+  }, [articles]);
 
   const enrichedArticles = getFeaturedArticles();
 
-  // Fetch saved articles for authenticated user
-  const fetchSavedArticles = useCallback(async () => {
-    if (!session) {
-      setSavedArticles(new Set());
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/saved-articles');
-      if (response.ok) {
-        const savedData: Array<{ article: { id: string } }> = await response.json();
-        const savedIds = new Set(savedData.map((item) => item.article.id));
-        setSavedArticles(savedIds);
-      }
-    } catch (error) {
-      console.error('Error fetching saved articles:', error);
-    }
-  }, [session]);
-
-  // Handle saving/unsaving articles
-  const handleSaveToggle = async (articleId: string, shouldSave: boolean) => {
-    if (!session) return;
-
-    try {
-      if (shouldSave) {
-        // Find the article data to send with the save request
-        const articleData = articles.find(article => article.id === articleId);
-        
-        const response = await fetch('/api/saved-articles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            articleId, 
-            articleData: articleData ? {
-              title: articleData.title,
-              summary: articleData.summary,
-              content: articleData.content,
-              url: articleData.url,
-              imageUrl: articleData.imageUrl,
-              source: articleData.source,
-              category: articleData.category,
-              publishedAt: articleData.publishedAt
-            } : undefined
-          }),
-        });
-        if (response.ok) {
-          setSavedArticles(prev => new Set(prev).add(articleId));
-        } else {
-          console.error('Failed to save article:', await response.text());
-        }
-      } else {
-        const response = await fetch(`/api/saved-articles?articleId=${articleId}`, {
-          method: 'DELETE',
-        });
-        if (response.ok) {
-          setSavedArticles(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(articleId);
-            return newSet;
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error toggling save:', error);
-    }
-  };
-
-    // Optimized fetchNews function with better error handling
-  const fetchNews = useCallback(async (forceRefresh = false, category = selectedCategory, page = 1, append = false) => {
-    try {
-      if (page === 1) setLoading(true);
-      else setLoadingMore(true);
-
-      const searchParams = new URLSearchParams();
-      if (category !== 'all') searchParams.append('category', category);
-      searchParams.append('page', page.toString());
-      searchParams.append('pageSize', '15');
-      if (debouncedSearchQuery) searchParams.append('search', debouncedSearchQuery);
-
-      const url = `/api/news?${searchParams}`;
-      const response = await fetch(url, {
-        method: forceRefresh ? 'POST' : 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: forceRefresh ? JSON.stringify({ forceRefresh: true, category, page }) : undefined,
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        const newArticles = result.articles || [];
-        const pagination = result.pagination || {};
-
-        if (append && page > 1) {
-          setArticles(prev => [...prev, ...newArticles]);
-        } else {
-          setArticles(newArticles);
-          setCurrentPage(1);
-        }
-        
-        setHasMore(pagination.hasMore || false);
-        setCurrentPage(page);
-      } else {
-        console.error('Failed to fetch news');
-      }
-    } catch (error) {
-      console.error('Error fetching news:', error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
-    }
-  }, [selectedCategory, debouncedSearchQuery]);
-
-  const loadMoreNews = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
-    await fetchNews(false, selectedCategory, currentPage + 1, true);
-  }, [hasMore, loadingMore, selectedCategory, currentPage, fetchNews]);
-
-  const handleSearchSubmit = useCallback(() => {
-    setCurrentPage(1);
-    setHasMore(true);
-    fetchNews(false, selectedCategory, 1, false);
-  }, [selectedCategory, fetchNews]);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    setCurrentPage(1);
-    setHasMore(true);
-    await fetchNews(true, selectedCategory, 1, false);
-  };
-
-  // Effect to trigger search when debounced query changes
-  useEffect(() => {
-    // Fetch when debounced search changes, but avoid initial fetch if empty
-    if (debouncedSearchQuery.trim()) {
-      setCurrentPage(1);
-      setHasMore(true);
-      fetchNews(false, selectedCategory, 1, false);
-    }
-  }, [debouncedSearchQuery, selectedCategory, fetchNews]);
-
-  // Effect to fetch news when category changes
-  useEffect(() => {
-    setCurrentPage(1);
-    setHasMore(true);
-    fetchNews(false, selectedCategory, 1, false);
-  }, [selectedCategory, fetchNews]);
-
-  // Infinite scroll detection with throttling
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    const handleScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const scrollPosition = window.innerHeight + document.documentElement.scrollTop;
-        const documentHeight = document.documentElement.offsetHeight;
-        const threshold = documentHeight - 1000;
-        
-        if (
-          scrollPosition >= threshold
-          && hasMore && !loadingMore && !loading
-        ) {
-          loadMoreNews();
-        }
-      }, 100); // Throttle scroll events
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      clearTimeout(timeoutId);
-    };
-  }, [hasMore, loadingMore, loading, loadMoreNews]);
-
-  // Initial load effect - only run once on mount
-  useEffect(() => {
-    const initialFetch = async () => {
-      try {
-        setLoading(true);
-        const searchParams = new URLSearchParams();
-        searchParams.append('page', '1');
-        searchParams.append('pageSize', '15');
-
-        const response = await fetch(`/api/news?${searchParams}`);
-        if (response.ok) {
-          const result = await response.json();
-          setArticles(result.articles || []);
-          setHasMore(result.pagination?.hasMore || false);
-          setCurrentPage(1);
-        }
-      } catch (error) {
-        console.error('Error in initial fetch:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initialFetch();
-  }, []); // Empty dependency array for initial load only
-
-  // Fetch saved articles when session changes
-  useEffect(() => {
-    fetchSavedArticles();
-  }, [fetchSavedArticles]);
-
-  if (loading && articles.length === 0) {
+  // Loading state
+  if (isLoading && articles.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="flex flex-col items-center space-y-6">
@@ -497,7 +302,7 @@ export default function NewsApp() {
                   user={session.user || null}
                   savedArticlesCount={savedArticles.size}
                   onRefresh={handleRefresh}
-                  refreshing={refreshing}
+                  refreshing={refreshNewsMutation.isPending}
                 />
               ) : (
                 <button
@@ -582,8 +387,18 @@ export default function NewsApp() {
               </p>
             </div>
 
+            {/* Show loading indicator when fetching */}
+            {isFetching && (
+              <div className="mb-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center space-x-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  <span className="text-blue-700 text-sm font-medium">Updating news...</span>
+                </div>
+              </div>
+            )}
+
             {/* Google News Style Layout */}
-            {filteredArticles.length > 0 ? (
+            {enrichedArticles.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   {/* Main Content - Left Side */}
@@ -598,10 +413,10 @@ export default function NewsApp() {
                         </h2>
                         <button 
                           onClick={handleRefresh}
-                          disabled={refreshing}
+                          disabled={refreshNewsMutation.isPending}
                           className="text-blue-600 hover:text-blue-700 text-sm font-semibold disabled:opacity-50 flex items-center space-x-1 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                         >
-                          {refreshing ? (
+                          {refreshNewsMutation.isPending ? (
                             <>
                               <div className="animate-spin h-3 w-3 border border-blue-600 border-t-transparent rounded-full"></div>
                               <span>Refreshing...</span>
@@ -804,7 +619,7 @@ export default function NewsApp() {
                 </div>
                 
                 {/* Load More Indicator */}
-                {loadingMore && (
+                {isLoading && currentPage > 1 && (
                   <div className="flex justify-center items-center py-8">
                     <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-6 flex items-center space-x-4">
                       <div className="animate-spin h-8 w-8 border-3 border-blue-600 border-t-transparent rounded-full"></div>
@@ -817,7 +632,7 @@ export default function NewsApp() {
                 )}
                 
                 {/* End of articles message */}
-                {!hasMore && !loadingMore && filteredArticles.length > 0 && (
+                {!hasMore && !isLoading && enrichedArticles.length > 0 && (
                   <div className="text-center py-8">
                     <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-8 max-w-md mx-auto">
                       <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-6">

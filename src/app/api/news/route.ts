@@ -113,31 +113,60 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch fresh articles from APIs with priority on breaking news
+    // Fetch fresh articles with enhanced international coverage
     let freshArticles: NewsAPIArticle[] = [];
 
-    // First, try to get some breaking news
-    try {
-      const breakingNews = await newsAPIService.fetchBreakingNews(5);
-      freshArticles.push(...breakingNews);
-    } catch (error) {
-      console.warn('Could not fetch breaking news:', error);
+    // For "all" category or when we want comprehensive coverage, use our enhanced method
+    if (!category || category === 'all') {
+      try {
+        console.log('🌍 Fetching comprehensive top stories (international + breaking)...');
+        freshArticles = await newsAPIService.fetchComprehensiveTopStories(pageSize);
+      } catch (error) {
+        console.warn('Could not fetch comprehensive top stories:', error);
+        // Fallback to regular method
+        freshArticles = await newsAPIService.fetchTopHeadlines({
+          category: undefined,
+          page,
+          pageSize
+        });
+      }
+    } else {
+      // For specific categories, use the targeted approach
+      try {
+        // First get some breaking news in the category
+        const breakingNews = await newsAPIService.fetchBreakingNews(Math.ceil(pageSize * 0.3));
+        const categoryBreaking = breakingNews.filter(article => 
+          article.category?.toLowerCase() === category?.toLowerCase() ||
+          article.title.toLowerCase().includes(category?.toLowerCase() || '')
+        );
+        
+        freshArticles.push(...categoryBreaking);
+        
+        // Then get regular category articles
+        const regularArticles = await newsAPIService.fetchTopHeadlines({
+          category: category,
+          page,
+          pageSize: Math.max(pageSize - freshArticles.length, 10)
+        });
+        
+        freshArticles.push(...regularArticles);
+      } catch (error) {
+        console.warn(`Could not fetch enhanced ${category} news:`, error);
+        // Fallback to basic category fetch
+        freshArticles = await newsAPIService.fetchTopHeadlines({
+          category: category,
+          page,
+          pageSize
+        });
+      }
     }
 
-    // Then get regular articles to fill the rest
-    const regularArticles = await newsAPIService.fetchTopHeadlines({
-      category: category === 'all' ? undefined : (category || undefined),
-      page,
-      pageSize: Math.max(pageSize - freshArticles.length, 10)
-    });
-
-    // Combine and deduplicate
-    const allArticles = [...freshArticles, ...regularArticles];
-    const uniqueArticles = allArticles.filter((article, index, self) => 
+    // Deduplicate and sort
+    const uniqueArticles = freshArticles.filter((article, index, self) => 
       index === self.findIndex(a => a.url === article.url)
     );
 
-    // Sort by publication date (most recent first)
+    // Sort by publication date (most recent first) and limit to requested size
     freshArticles = uniqueArticles
       .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
       .slice(0, pageSize);
