@@ -125,13 +125,30 @@ export default function NewsApp() {
 
     try {
       if (shouldSave) {
+        // Find the article data to send with the save request
+        const articleData = articles.find(article => article.id === articleId);
+        
         const response = await fetch('/api/saved-articles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ articleId }),
+          body: JSON.stringify({ 
+            articleId, 
+            articleData: articleData ? {
+              title: articleData.title,
+              summary: articleData.summary,
+              content: articleData.content,
+              url: articleData.url,
+              imageUrl: articleData.imageUrl,
+              source: articleData.source,
+              category: articleData.category,
+              publishedAt: articleData.publishedAt
+            } : undefined
+          }),
         });
         if (response.ok) {
           setSavedArticles(prev => new Set(prev).add(articleId));
+        } else {
+          console.error('Failed to save article:', await response.text());
         }
       } else {
         const response = await fetch(`/api/saved-articles?articleId=${articleId}`, {

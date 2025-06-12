@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { articleId, notes } = await request.json();
+    const { articleId, notes, articleData } = await request.json();
 
     if (!articleId) {
       return NextResponse.json(
@@ -56,14 +56,62 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if article exists
-    const article = await prisma.newsArticle.findUnique({
+    // Check if article exists in database
+    let article = await prisma.newsArticle.findUnique({
       where: { id: articleId },
     });
 
+    // If article doesn't exist and we have article data, try to find by URL or create it
+    if (!article && articleData) {
+      // First try to find by URL (in case it was saved with a different ID)
+      article = await prisma.newsArticle.findUnique({
+        where: { url: articleData.url },
+      });
+
+      // If still not found, create the article
+      if (!article) {
+        try {
+          article = await prisma.newsArticle.create({
+            data: {
+              title: articleData.title,
+              summary: articleData.summary || '',
+              content: articleData.content || '',
+              url: articleData.url,
+              imageUrl: articleData.imageUrl || undefined,
+              source: articleData.source,
+              category: articleData.category || 'general',
+              publishedAt: new Date(articleData.publishedAt)
+            }
+          });
+        } catch (error) {
+          console.error('Error creating article:', error);
+          return NextResponse.json(
+            { error: 'Failed to save article to database' },
+            { status: 500 }
+          );
+        }
+      }
+    }
+
     if (!article) {
       return NextResponse.json(
-        { error: 'Article not found' },
+        { error: 'Article not found and no article data provided' },
+        { status: 404 }
+      );
+    }
+
+    // Use the actual article ID from the database
+    const dbArticleId = article.id;
+
+    // Verify user exists in database
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id }
+    });
+
+    if (!user) {
+      console.error('User not found in database:', session.user.id);
+      return NextResponse.json(
+        { error: 'User not found in database' },
         { status: 404 }
       );
     }
@@ -73,7 +121,7 @@ export async function POST(request: NextRequest) {
       where: {
         userId_articleId: {
           userId: session.user.id,
-          articleId: articleId,
+          articleId: dbArticleId,
         },
       },
     });
@@ -84,20 +132,35 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
-
     // Save the article
-    const savedArticle = await prisma.savedArticle.create({
-      data: {
-        userId: session.user.id,
-        articleId: articleId,
-        notes: notes || null,
-      },
-      include: {
-        article: true,
-      },
-    });
+    try {
+      const savedArticle = await prisma.savedArticle.create({
+        data: {
+          userId: session.user.id,
+          articleId: dbArticleId,
+          notes: notes || null,
+        },
+        include: {
+          article: true,
+        },
+      });
 
-    return NextResponse.json(savedArticle);
+      return NextResponse.json(savedArticle);
+    } catch (createError: unknown) {
+      console.error('Error creating saved article:', {
+        error: createError instanceof Error ? createError.message : 'Unknown error',
+        userId: session.user.id,
+        articleId: dbArticleId
+      });
+
+      return NextResponse.json(
+        { 
+          error: 'Failed to save article', 
+          details: process.env.NODE_ENV === 'development' && createError instanceof Error ? createError.message : undefined 
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error saving article:', error);
     return NextResponse.json(
@@ -125,6 +188,23 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { error: 'Article ID is required' },
         { status: 400 }
+      );
+    }
+
+    // First find the saved article to make sure it exists
+    const savedArticle = await prisma.savedArticle.findUnique({
+      where: {
+        userId_articleId: {
+          userId: session.user.id,
+          articleId: articleId,
+        },
+      },
+    });
+
+    if (!savedArticle) {
+      return NextResponse.json(
+        { error: 'Saved article not found' },
+        { status: 404 }
       );
     }
 

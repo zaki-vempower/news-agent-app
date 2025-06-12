@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { newsAPIService } from '@/lib/newsAPI';
+import { newsAPIService, NewsAPIArticle } from '@/lib/newsAPI';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,9 +14,16 @@ export async function GET(request: NextRequest) {
     if (search) {
       const articles = await newsAPIService.searchNews(search, page, pageSize);
       
+      // Filter search results to only include articles from last 2 days
+      const searchTwoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const recentArticles = articles.filter(article => {
+        const publishedDate = new Date(article.publishedAt);
+        return publishedDate >= searchTwoDaysAgo;
+      });
+      
       // Save search results to database asynchronously
       setImmediate(async () => {
-        for (const article of articles) {
+        for (const article of recentArticles) {
           try {
             await prisma.newsArticle.upsert({
               where: { url: article.url },
@@ -44,7 +51,7 @@ export async function GET(request: NextRequest) {
       });
 
       return NextResponse.json({
-        articles: articles.map(article => ({
+        articles: recentArticles.map(article => ({
           id: `search-${Date.now()}-${Math.random()}`,
           title: article.title,
           summary: article.description || article.content?.substring(0, 300) + '...',
@@ -59,17 +66,25 @@ export async function GET(request: NextRequest) {
         pagination: {
           page,
           pageSize,
-          hasMore: articles.length === pageSize
+          hasMore: recentArticles.length === pageSize
         }
       });
     }
 
     // For regular news fetching, check if we have recent articles first
-    const whereClause = category && category !== 'all' 
-      ? { category: { equals: category } }
-      : {};
+    // Only show articles from the last 2 days
+    const mainTwoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    
+    const whereClause = {
+      publishedAt: {
+        gte: mainTwoDaysAgo
+      },
+      ...(category && category !== 'all' 
+        ? { category: { equals: category } }
+        : {})
+    };
 
-    // Get cached articles from database
+    // Get cached articles from database (within last 2 days only)
     const existingArticles = await prisma.newsArticle.findMany({
       where: whereClause,
       orderBy: { publishedAt: 'desc' },
@@ -98,16 +113,44 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch fresh articles from APIs
-    const freshArticles = await newsAPIService.fetchTopHeadlines({
+    // Fetch fresh articles from APIs with priority on breaking news
+    let freshArticles: NewsAPIArticle[] = [];
+
+    // First, try to get some breaking news
+    try {
+      const breakingNews = await newsAPIService.fetchBreakingNews(5);
+      freshArticles.push(...breakingNews);
+    } catch (error) {
+      console.warn('Could not fetch breaking news:', error);
+    }
+
+    // Then get regular articles to fill the rest
+    const regularArticles = await newsAPIService.fetchTopHeadlines({
       category: category === 'all' ? undefined : (category || undefined),
       page,
-      pageSize
+      pageSize: Math.max(pageSize - freshArticles.length, 10)
+    });
+
+    // Combine and deduplicate
+    const allArticles = [...freshArticles, ...regularArticles];
+    const uniqueArticles = allArticles.filter((article, index, self) => 
+      index === self.findIndex(a => a.url === article.url)
+    );
+
+    // Sort by publication date (most recent first)
+    freshArticles = uniqueArticles
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+      .slice(0, pageSize);
+
+    // Filter fresh articles to only include those published within last 2 days
+    const recentFreshArticles = freshArticles.filter(article => {
+      const publishedDate = new Date(article.publishedAt);
+      return publishedDate >= mainTwoDaysAgo;
     });
 
     // Save new articles to database asynchronously
     const savedArticles = [];
-    for (const article of freshArticles) {
+    for (const article of recentFreshArticles) {
       try {
         const saved = await prisma.newsArticle.upsert({
           where: { url: article.url },
@@ -141,7 +184,7 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         pageSize,
-        hasMore: freshArticles.length === pageSize
+        hasMore: recentFreshArticles.length === pageSize
       }
     });
 
@@ -162,26 +205,66 @@ export async function POST(request: NextRequest) {
   try {
     const { forceRefresh, category, page = 1 } = await request.json();
     
+    // Define date constants for the POST function
+    const postTwoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
     if (forceRefresh) {
-      // Clear old articles and fetch fresh ones
+      // Clear old articles (older than 2 days) and scraped data older than 24 hours
       await prisma.newsArticle.deleteMany({
         where: {
-          scrapedAt: {
-            lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // older than 24 hours
-          }
+          OR: [
+            {
+              publishedAt: {
+                lt: postTwoDaysAgo
+              }
+            },
+            {
+              scrapedAt: {
+                lt: oneDayAgo
+              }
+            }
+          ]
         }
       });
     }
 
-    // Fetch fresh articles from APIs
-    const freshArticles = await newsAPIService.fetchTopHeadlines({
+    // Fetch fresh articles from APIs with breaking news priority
+    let freshArticles: NewsAPIArticle[] = [];
+
+    // First, get breaking news
+    try {
+      const breakingNews = await newsAPIService.fetchBreakingNews(5);
+      freshArticles.push(...breakingNews);
+    } catch (error) {
+      console.warn('Could not fetch breaking news:', error);
+    }
+
+    // Then get regular top headlines
+    const regularArticles = await newsAPIService.fetchTopHeadlines({
       category: category === 'all' ? undefined : category,
       page,
-      pageSize: 20
+      pageSize: Math.max(20 - freshArticles.length, 10)
+    });
+
+    // Combine, deduplicate, and sort
+    const allArticles = [...freshArticles, ...regularArticles];
+    const uniqueArticles = allArticles.filter((article, index, self) => 
+      index === self.findIndex(a => a.url === article.url)
+    );
+
+    freshArticles = uniqueArticles
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+      .slice(0, 20);
+    
+    // Filter fresh articles to only include those published within last 2 days
+    const recentFreshArticles = freshArticles.filter(article => {
+      const publishedDate = new Date(article.publishedAt);
+      return publishedDate >= postTwoDaysAgo;
     });
     
     const savedArticles = [];
-    for (const article of freshArticles) {
+    for (const article of recentFreshArticles) {
       try {
         const saved = await prisma.newsArticle.upsert({
           where: { url: article.url },
@@ -222,7 +305,7 @@ export async function POST(request: NextRequest) {
       pagination: {
         page,
         pageSize: 20,
-        hasMore: freshArticles.length === 20
+        hasMore: recentFreshArticles.length === 20
       }
     });
   } catch (error) {

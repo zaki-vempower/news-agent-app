@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const { title } = await request.json();
+    const { title, selectedArticles } = await request.json();
 
     // Set all other sessions to inactive
     await prisma.chatSession.updateMany({
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         title: title || `Chat ${new Date().toLocaleDateString()}`,
         isActive: true,
+        selectedArticles: selectedArticles ? JSON.stringify(selectedArticles) : null,
       },
       include: {
         messages: {

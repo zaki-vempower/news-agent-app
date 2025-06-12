@@ -41,25 +41,38 @@ export class NewsAPIService {
     const { category = '', country = 'us', page = 1, pageSize = 20 } = params;
 
     try {
-      // Try NewsAPI first (if API key is available)
+      // Try NewsAPI first (if API key is available) - prioritize for latest news
       if (this.NEWS_API_KEY) {
+        console.log('Fetching from NewsAPI...');
         const articles = await this.fetchFromNewsAPI(category, country, page, pageSize);
-        if (articles.length > 0) return articles;
+        if (articles.length > 0) {
+          console.log(`NewsAPI returned ${articles.length} articles`);
+          return articles;
+        }
       }
 
       // Fallback to GNews API
       if (this.GNEWS_API_KEY) {
+        console.log('Falling back to GNews API...');
         const articles = await this.fetchFromGNewsAPI(category, page, pageSize);
-        if (articles.length > 0) return articles;
+        if (articles.length > 0) {
+          console.log(`GNews returned ${articles.length} articles`);
+          return articles;
+        }
       }
 
       // Fallback to Guardian API
       if (this.GUARDIAN_API_KEY) {
+        console.log('Falling back to Guardian API...');
         const articles = await this.fetchFromGuardianAPI(category, page, pageSize);
-        if (articles.length > 0) return articles;
+        if (articles.length > 0) {
+          console.log(`Guardian returned ${articles.length} articles`);
+          return articles;
+        }
       }
 
       // Final fallback to free sources
+      console.log('Using free API sources...');
       return await this.fetchFromFreeAPIs(category, page, pageSize);
 
     } catch (error) {
@@ -69,50 +82,130 @@ export class NewsAPIService {
     }
   }
 
-  private async fetchFromNewsAPI(
-    category: string, 
-    country: string, 
-    page: number, 
-    pageSize: number
-  ): Promise<NewsAPIArticle[]> {
+  // Fetch breaking news specifically
+  async fetchBreakingNews(pageSize: number = 10): Promise<NewsAPIArticle[]> {
     try {
-      const params = new URLSearchParams({
-        country,
-        pageSize: pageSize.toString(),
-        page: page.toString(),
-        apiKey: this.NEWS_API_KEY!
-      });
+      const breakingKeywords = ['breaking', 'urgent', 'developing', 'live', 'alert'];
+      const results: NewsAPIArticle[] = [];
 
-      if (category && category !== 'all') {
-        // Map our categories to NewsAPI categories
-        const categoryMap: Record<string, string> = {
-          'technology': 'technology',
-          'business': 'business', 
-          'health': 'health',
-          'science': 'science',
-          'sports': 'sports',
-          'entertainment': 'entertainment',
-          'general': 'general'
-        };
-        
-        const newsAPICategory = categoryMap[category.toLowerCase()] || 'general';
-        params.append('category', newsAPICategory);
+      // Try to fetch breaking news from NewsAPI
+      if (this.NEWS_API_KEY) {
+        for (const keyword of breakingKeywords) {
+          try {
+            const articles = await this.searchNews(keyword, 1, 5);
+            results.push(...articles);
+            if (results.length >= pageSize) break;
+          } catch (error) {
+            console.warn(`Failed to search for ${keyword}:`, error);
+          }
+        }
       }
 
-      const response = await fetch(`${this.NEWS_API_BASE_URL}/top-headlines?${params}`);
-      
-      if (!response.ok) {
-        console.warn(`NewsAPI failed with status ${response.status}: ${response.statusText}`);
-        return [];
-      }
+      // Remove duplicates and return most recent
+      const uniqueArticles = results.filter((article, index, self) => 
+        index === self.findIndex(a => a.url === article.url)
+      );
 
-      const data: NewsAPIResponse = await response.json();
-      return data.articles || [];
+      return uniqueArticles
+        .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+        .slice(0, pageSize);
     } catch (error) {
-      console.warn('NewsAPI fetch failed:', error);
+      console.error('Error fetching breaking news:', error);
       return [];
     }
   }
+
+  // private async fetchFromNewsAPI(
+  //   category: string, 
+  //   country: string, 
+  //   page: number, 
+  //   pageSize: number
+  // ): Promise<NewsAPIArticle[]> {
+  //   try {
+  //     const params = new URLSearchParams({
+  //       country,
+  //       pageSize: pageSize.toString(),
+  //       page: page.toString(),
+  //       apiKey: this.NEWS_API_KEY!
+  //     });
+
+  //     if (category && category !== 'all') {
+  //       // Map our categories to NewsAPI categories
+  //       const categoryMap: Record<string, string> = {
+  //         'technology': 'technology',
+  //         'business': 'business', 
+  //         'health': 'health',
+  //         'science': 'science',
+  //         'sports': 'sports',
+  //         'entertainment': 'entertainment',
+  //         'general': 'general'
+  //       };
+        
+  //       const newsAPICategory = categoryMap[category.toLowerCase()] || 'general';
+  //       params.append('category', newsAPICategory);
+  //     }
+
+  //     const response = await fetch(`${this.NEWS_API_BASE_URL}/top-headlines?${params}`);
+      
+  //     if (!response.ok) {
+  //       console.warn(`NewsAPI failed with status ${response.status}: ${response.statusText}`);
+  //       return [];
+  //     }
+
+  //     const data: NewsAPIResponse = await response.json();
+  //     return data.articles || [];
+  //   } catch (error) {
+  //     console.warn('NewsAPI fetch failed:', error);
+  //     return [];
+  //   }
+  // }
+
+  private async fetchFromNewsAPI(
+  category: string,
+  country: string,
+  page: number,
+  pageSize: number
+): Promise<NewsAPIArticle[]> {
+  try {
+    const params = new URLSearchParams({
+      country,
+      pageSize: pageSize.toString(),
+      page: page.toString(),
+      apiKey: this.NEWS_API_KEY!
+    });
+
+    // Only add category if it’s not 'all'
+    if (category && category.toLowerCase() !== 'all') {
+      const categoryMap: Record<string, string> = {
+        'technology': 'technology',
+        'business': 'business',
+        'health': 'health',
+        'science': 'science',
+        'sports': 'sports',
+        'entertainment': 'entertainment',
+        'general': 'general'
+      };
+
+      const newsAPICategory = categoryMap[category.toLowerCase()] || 'general';
+      params.append('category', newsAPICategory);
+    }
+
+    const url = `${this.NEWS_API_BASE_URL}/top-headlines?${params}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.warn(`NewsAPI failed with status ${response.status}: ${response.statusText}`);
+      return [];
+    }
+
+    const data: NewsAPIResponse = await response.json();
+    return data.articles || [];
+  } catch (error) {
+    console.warn('NewsAPI fetch failed:', error);
+    return [];
+  }
+}
+
 
   private async fetchFromGNewsAPI(
     category: string,

@@ -97,12 +97,13 @@ model SavedArticle {
 }
 
 model ChatSession {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isActive    Boolean  @default(true)
+  id                String   @id @default(cuid())
+  userId            String
+  title             String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  isActive          Boolean  @default(true)
+  selectedArticles  String?  // JSON string of selected article IDs
   
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages ChatMessage[]
