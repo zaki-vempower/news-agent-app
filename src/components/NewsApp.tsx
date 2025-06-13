@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Newspaper, MessageCircle, Clock, Filter, LogIn, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { Newspaper, MessageCircle, Clock, LogIn, Search, TrendingUp, Zap, Globe, Calendar, ExternalLink, Bookmark, BookmarkCheck } from 'lucide-react';
 import { useSession, signIn } from 'next-auth/react';
 import { formatDistanceToNow } from 'date-fns';
-import NewsCard from './NewsCard';
-import FeaturedNewsCard from './FeaturedNewsCard';
 import ChatBot from './ChatBotWithSessions';
 import DropdownMenu from './DropdownMenu';
 import { useDebounce } from '../hooks/useDebounce';
@@ -37,9 +35,6 @@ export default function NewsApp() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  // Local news location state
-  const [selectedLocation, setSelectedLocation] = useState<'siena' | 'hyderabad'>('siena');
-  const [statsCollapsed, setStatsCollapsed] = useState(false);
 
   // Debounce search query to prevent excessive API calls
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
@@ -106,17 +101,6 @@ export default function NewsApp() {
       }
       return newSelection;
     });
-  };
-
-  // Select all visible articles
-  const selectAllArticles = () => {
-    const allIds = new Set(enrichedArticles.map(article => article.id));
-    setSelectedArticles(allIds);
-  };
-
-  // Clear all selections
-  const clearAllSelections = () => {
-    setSelectedArticles(new Set());
   };
 
   // Get selected articles data
@@ -366,88 +350,104 @@ export default function NewsApp() {
     fetchSavedArticles();
   }, [fetchSavedArticles]);
 
+  // Helper function to get category badge class
+  const getCategoryBadgeClass = (category: string) => {
+    const categoryLower = category?.toLowerCase() || '';
+    const baseClasses = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide transition-all';
+    
+    switch (categoryLower) {
+      case 'technology': return `${baseClasses} bg-blue-100 text-blue-800`;
+      case 'business': return `${baseClasses} bg-green-100 text-green-800`;
+      case 'politics': return `${baseClasses} bg-yellow-100 text-yellow-800`;
+      case 'sports': return `${baseClasses} bg-pink-100 text-pink-800`;
+      case 'health': return `${baseClasses} bg-emerald-100 text-emerald-800`;
+      case 'science': return `${baseClasses} bg-indigo-100 text-indigo-800`;
+      case 'environment': return `${baseClasses} bg-green-100 text-green-700`;
+      case 'economy': return `${baseClasses} bg-orange-100 text-orange-800`;
+      default: return `${baseClasses} bg-gray-100 text-gray-800`;
+    }
+  };
+
   if (loading && articles.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-6">
-          <div className="relative">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/25">
-              <Newspaper className="h-10 w-10 text-white" />
-            </div>
-            <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full animate-pulse shadow-lg"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Newspaper className="h-8 w-8 text-white animate-pulse" />
           </div>
-          <div className="text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-2">NewsBot</h2>
-            <p className="text-gray-600 text-lg mb-1">Loading latest news</p>
-            <p className="text-gray-500">Please wait...</p>
-          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading News</h2>
+          <p className="text-gray-600">Getting the latest stories for you...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-lg shadow-lg border-b border-white/20 sticky top-0 z-40">
+    <div className="min-h-screen bg-gray-50">
+      {/* Modern Navigation Header */}
+      <header className="bg-white/95 backdrop-blur-lg border-b border-gray-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo and Brand */}
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/25">
-                <Newspaper className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                <Newspaper className="h-6 w-6 text-white" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">NewsBot</h1>
-                <p className="text-gray-600 text-xs sm:text-sm">
+                <h1 className="text-xl font-bold text-gray-900">NewsHub</h1>
+                <p className="text-xs text-gray-500">
                   {new Date().toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
+                    weekday: 'short', 
+                    month: 'short', 
                     day: 'numeric' 
                   })}
                 </p>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              {/* Category Dropdown - Hidden on mobile, shown in dropdown */}
-              <div className="hidden lg:block relative">
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="appearance-none bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium text-gray-700 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all shadow-sm"
-                >
-                  {categories.map((category) => (
-                    <option key={category.value} value={category.value}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-                <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              </div>
-              
-              {/* Search Bar - Responsive */}
-              <div className="relative">
+
+            {/* Navigation Links */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <button
+                onClick={() => setActiveTab('news')}
+                className={`text-sm font-medium transition-colors ${
+                  activeTab === 'news' 
+                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1' 
+                    : 'text-gray-700 hover:text-blue-600'
+                }`}
+              >
+                Latest News
+              </button>
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`text-sm font-medium transition-colors relative ${
+                  activeTab === 'chat' 
+                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1' 
+                    : 'text-gray-700 hover:text-blue-600'
+                }`}
+              >
+                AI Analysis
+                {selectedArticles.size > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {selectedArticles.size}
+                  </span>
+                )}
+              </button>
+            </nav>
+
+            {/* Search and Auth */}
+            <div className="flex items-center space-x-4">
+              <div className="relative hidden sm:block">
                 <input
                   type="text"
-                  placeholder="Search..."
+                  placeholder="Search news..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearchSubmit()}
-                  className="w-32 sm:w-48 lg:w-64 px-3 sm:px-4 py-2 sm:py-2.5 pl-8 sm:pl-10 pr-4 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl text-sm placeholder-gray-500 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all shadow-sm"
+                  className="w-64 px-4 py-2 pl-10 pr-4 bg-gray-100 border-0 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
                 />
-                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                {searchQuery && (
-                  <button
-                    onClick={handleSearchSubmit}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Go
-                  </button>
-                )}
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               </div>
 
-              {/* Authentication UI */}
               {status === 'loading' ? (
                 <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
               ) : session ? (
@@ -460,7 +460,7 @@ export default function NewsApp() {
               ) : (
                 <button
                   onClick={() => signIn()}
-                  className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105"
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                 >
                   <LogIn className="h-4 w-4" />
                   <span className="hidden sm:inline">Sign In</span>
@@ -469,427 +469,365 @@ export default function NewsApp() {
             </div>
           </div>
 
-          {/* Mobile Category Filter - Only visible on smaller screens */}
-          <div className="lg:hidden pb-4">
-            <div className="relative">
-              <select
-                value={selectedCategory}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full appearance-none bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium text-gray-700 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all shadow-sm"
+          {/* Mobile Navigation */}
+          <div className="md:hidden pb-4">
+            <div className="flex space-x-4 mb-3">
+              <button
+                onClick={() => setActiveTab('news')}
+                className={`flex-1 py-2 text-sm font-medium text-center rounded-lg transition-colors ${
+                  activeTab === 'news'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
               >
-                {categories.map((category) => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-              <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gradient-to-r from-gray-100 to-gray-200 rounded-xl p-1.5 shadow-inner">
-            <button
-              onClick={() => setActiveTab('news')}
-              className={`py-2.5 px-5 rounded-lg font-medium text-sm transition-all duration-200 ${
-                activeTab === 'news'
-                  ? 'bg-white text-blue-600 shadow-lg shadow-blue-500/10 transform scale-105'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Newspaper className="h-4 w-4" />
-                <span>News</span>
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`py-2.5 px-5 rounded-lg font-medium text-sm transition-all duration-200 ${
-                activeTab === 'chat'
-                  ? 'bg-white text-blue-600 shadow-lg shadow-blue-500/10 transform scale-105'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <MessageCircle className="h-4 w-4" />
-                <span>AI Chat</span>
+                News
+              </button>
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`flex-1 py-2 text-sm font-medium text-center rounded-lg transition-colors relative ${
+                  activeTab === 'chat'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                AI Chat
                 {selectedArticles.size > 0 && (
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs px-2 py-0.5 rounded-full shadow-lg">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                     {selectedArticles.size}
-                  </div>
+                  </span>
                 )}
-              </div>
-            </button>
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 pl-10 bg-gray-100 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'news' ? (
-          <div className="relative">
-            {/* Your briefing header */}
-            <div className="mb-8">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Your briefing</h1>
-              <p className="text-gray-600 text-lg">
-                {new Date().toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  day: 'numeric',
-                  month: 'long'
-                })}
-              </p>
-            </div>
+      {/* Category Filter Bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center space-x-6 py-3 overflow-x-auto">
+            {categories.map((category) => (
+              <button
+                key={category.value}
+                onClick={() => handleCategoryChange(category.value)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  selectedCategory === category.value
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                }`}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-            {/* Google News Style Layout */}
+      {/* Main Content */}
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'news' ? (
+          <div>
             {filteredArticles.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* Main Content - Left Side */}
-                  <div className="lg:col-span-2 space-y-8">
-                    {/* Top Stories Section */}
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-                      <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                          <span className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full mr-3"></span>
-                          Top stories
-                          <span className="ml-2 text-blue-600">›</span>
-                        </h2>
-                        <button 
-                          onClick={handleRefresh}
-                          disabled={refreshing}
-                          className="text-blue-600 hover:text-blue-700 text-sm font-medium disabled:opacity-50 flex items-center space-x-1"
-                        >
-                          {refreshing ? (
-                            <>
-                              <div className="animate-spin h-3 w-3 border border-blue-600 border-t-transparent rounded-full"></div>
-                              <span>Refreshing...</span>
-                            </>
-                          ) : (
-                            <span>Full coverage</span>
-                          )}
-                        </button>
-                      </div>
-                      
-                      {/* Main Featured Story */}
-                      {enrichedArticles
-                        .filter(article => article.isBreaking || article.isTrending)
-                        .slice(0, 1)
-                        .map((article) => (
-                          <div key={article.id} className="mb-6">
-                            <FeaturedNewsCard 
-                              article={article}
-                              isSelected={selectedArticles.has(article.id)}
-                              onToggleSelection={() => toggleArticleSelection(article.id)}
-                              isSaved={savedArticles.has(article.id)}
-                              onSaveToggle={handleSaveToggle}
-                              isBreaking={article.isBreaking}
-                              isTrending={article.isTrending}
-                            />
+                {/* Breaking News Banner */}
+                {enrichedArticles.some(article => article.isBreaking) && (
+                  <div className="mb-8 p-4 bg-red-600 text-white w-full">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-5 w-5 animate-pulse" />
+                      <span className="font-bold text-sm uppercase tracking-wide">Breaking News</span>
+                    </div>
+                    <h2 className="text-lg font-semibold mt-2">
+                      {enrichedArticles.find(article => article.isBreaking)?.title}
+                    </h2>
+                  </div>
+                )}
+
+                {/* Full Width Hero Section */}
+                <div className="mb-12 w-full">
+                  {enrichedArticles.slice(0, 1).map((article) => (
+                    <article key={article.id} className="bg-gradient-to-r from-blue-50 via-white to-purple-50 border-b-2 border-blue-100 pb-8 mb-8 w-full">
+                      <div className="w-full">
+                        <div className="flex items-start justify-between mb-6">
+                          <div className="flex items-center space-x-3">
+                            {article.category && (
+                              <span className={getCategoryBadgeClass(article.category)}>
+                                {article.category}
+                              </span>
+                            )}
+                            {article.isBreaking && (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-red-100 text-red-700 animate-pulse">
+                                Breaking
+                              </span>
+                            )}
+                            {article.isTrending && (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide bg-orange-100 text-orange-700">
+                                <TrendingUp className="h-3 w-3 mr-1" />
+                                Trending
+                              </span>
+                            )}
                           </div>
-                        ))
-                      }
-                      
-                      {/* Secondary Stories */}
-                      <div className="grid gap-4">
-                        {enrichedArticles
-                          .filter(article => !article.isBreaking && !article.isTrending)
-                          .slice(0, 3)
-                          .map((article) => (
-                            <div key={article.id} className="flex items-start space-x-4 p-4 hover:bg-gray-50 rounded-xl transition-colors">
-                              <div className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-gray-200">
-                                {article.imageUrl ? (
-                                  <img 
-                                    src={article.imageUrl} 
-                                    alt={article.title}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200"></div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    {article.source}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    {formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true })}
-                                  </span>
-                                </div>
-                                <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 cursor-pointer hover:text-blue-600">
-                                  {article.title}
-                                </h3>
-                              </div>
-                            </div>
-                          ))
-                        }
-                      </div>
-                    </div>
-                    
-                    {/* More News Section */}
-                    <div className="space-y-6">
-                      <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                        <span className="w-1 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full mr-3"></span>
-                        More News
-                      </h2>
-                      <div className="grid gap-6 md:grid-cols-2">
-                        {enrichedArticles
-                          .filter(article => !article.isBreaking && !article.isTrending)
-                          .slice(3)
-                          .map((article) => (
-                            <NewsCard 
-                              key={article.id} 
-                              article={article}
-                              isSelected={selectedArticles.has(article.id)}
-                              onToggleSelection={() => toggleArticleSelection(article.id)}
-                              isSaved={savedArticles.has(article.id)}
-                              onSaveToggle={handleSaveToggle}
-                            />
-                          ))
-                        }
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Sidebar - Right Side */}
-                  <div className="space-y-8">
-                    {/* Weather Widget */}
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">Today&apos;s Weather</h3>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-gray-900">29°C</div>
-                          <div className="text-sm text-gray-600">Hyderabad</div>
-                        </div>
-                      </div>
-                      <div className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer">Google Weather</div>
-                    </div>
-                    
-                    {/* Local News Section */}
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                          Local news
-                          <span className="ml-2 text-blue-600">›</span>
-                        </h3>
-                        <div className="flex space-x-2">
-                          <button 
-                            onClick={() => setSelectedLocation('siena')}
-                            className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                              selectedLocation === 'siena' 
-                                ? 'bg-gray-800 text-white' 
-                                : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            Siena
-                          </button>
-                          <button 
-                            onClick={() => setSelectedLocation('hyderabad')}
-                            className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                              selectedLocation === 'hyderabad' 
-                                ? 'bg-gray-800 text-white' 
-                                : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            Hyderabad
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        {enrichedArticles
-                          .filter(article => {
-                            const text = `${article.title} ${article.summary || ''} ${article.source}`.toLowerCase();
-                            if (selectedLocation === 'siena') {
-                              return text.includes('siena') || text.includes('italy') || text.includes('tuscany');
-                            } else {
-                              return text.includes('hyderabad') || text.includes('india') || text.includes('telangana');
-                            }
-                          })
-                          .slice(0, 4)
-                          .map((article) => (
-                            <div key={article.id} className="flex items-start space-x-3">
-                              <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-200">
-                                {article.imageUrl ? (
-                                  <img 
-                                    src={article.imageUrl} 
-                                    alt={article.title}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200"></div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    {article.source}
-                                  </span>
-                                </div>
-                                <h4 className="text-sm font-medium text-gray-900 line-clamp-2 cursor-pointer hover:text-blue-600">
-                                  {article.title}
-                                </h4>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true })}
-                                </p>
-                              </div>
-                            </div>
-                          ))
-                        }
-                      </div>
-                    </div>
-                    
-                    {/* Category Navigation */}
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Browse by Category</h3>
-                      <div className="space-y-2">
-                        {categories.slice(1).map((category) => (
                           <button
-                            key={category.value}
-                            onClick={() => handleCategoryChange(category.value)}
-                            className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
-                              selectedCategory === category.value
-                                ? 'bg-blue-100 text-blue-800 font-medium'
-                                : 'text-gray-700 hover:bg-gray-100'
+                            onClick={() => toggleArticleSelection(article.id)}
+                            className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                              selectedArticles.has(article.id)
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'border-gray-300 hover:border-blue-400'
                             }`}
                           >
-                            {category.label}
+                            {selectedArticles.has(article.id) && <span className="text-xs">✓</span>}
                           </button>
-                        ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full">
+                          {article.imageUrl && (
+                            <div className="relative overflow-hidden">
+                              <img 
+                                src={article.imageUrl} 
+                                alt={article.title}
+                                className="w-full h-96 object-cover hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                            </div>
+                          )}
+
+                          <div className="flex flex-col justify-center">
+                            <h1 className="text-3xl lg:text-5xl font-bold text-gray-900 mb-6 hover:text-blue-600 transition-colors leading-tight">
+                              {article.title}
+                            </h1>
+
+                            {article.summary && (
+                              <p className="text-gray-600 text-xl leading-relaxed mb-8">
+                                {article.summary}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-6 text-sm text-gray-500">
+                                <div className="flex items-center space-x-2">
+                                  <Globe className="h-4 w-4" />
+                                  <span className="font-medium">{article.source}</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Clock className="h-4 w-4" />
+                                  <span>{formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true })}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => window.open(article.url, '_blank')}
+                                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
+                              >
+                                <span>Read Full Article</span>
+                                <ExternalLink className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
+                    </article>
+                  ))}
+                </div>
+
+                {/* Full Width News Grid */}
+                <section className="mb-12 w-full">
+                  <div className="flex items-center justify-between mb-8 w-full">
+                    <h2 className="text-3xl font-bold text-gray-900">Latest Headlines</h2>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <TrendingUp className="h-4 w-4 text-orange-500" />
+                        <span>{enrichedArticles.filter(a => a.isTrending).length} Trending</span>
+                      </div>
+                      <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        <Clock className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+                      </button>
                     </div>
                   </div>
-                </div>
-                
-                {/* Load More Indicator */}
+
+                  {/* Full Width Grid Layout */}
+                  <div className="w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 w-full">
+                      {enrichedArticles.slice(1).map((article, index) => (
+                        <article key={article.id} className="bg-white border border-gray-200 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative group">
+                          {/* Article Selection */}
+                          <button
+                            onClick={() => toggleArticleSelection(article.id)}
+                            className={`absolute top-3 left-3 z-10 w-5 h-5 rounded border flex items-center justify-center text-xs transition-all ${
+                              selectedArticles.has(article.id)
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'bg-white/90 border-gray-300 hover:border-blue-400'
+                            }`}
+                          >
+                            {selectedArticles.has(article.id) && '✓'}
+                          </button>
+
+                          {/* Article Number */}
+                          <div className="absolute top-3 right-3 z-10 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            {String(index + 1).padStart(2, '0')}
+                          </div>
+
+                          {/* Article Image */}
+                          <div className="relative overflow-hidden">
+                            {article.imageUrl ? (
+                              <img 
+                                src={article.imageUrl} 
+                                alt={article.title}
+                                className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                <Globe className="h-12 w-12 text-gray-400" />
+                              </div>
+                            )}
+                            
+                            {/* Category Badge on Image */}
+                            {article.category && (
+                              <div className="absolute bottom-3 left-3">
+                                <span className={getCategoryBadgeClass(article.category)}>
+                                  {article.category}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Breaking/Trending Badges */}
+                            <div className="absolute top-12 left-3 space-y-2">
+                              {article.isBreaking && (
+                                <span className="block bg-red-600 text-white text-xs px-2 py-1 rounded animate-pulse">
+                                  Breaking
+                                </span>
+                              )}
+                              {article.isTrending && (
+                                <span className="flex items-center bg-orange-600 text-white text-xs px-2 py-1 rounded">
+                                  <TrendingUp className="h-3 w-3 mr-1" />
+                                  Trending
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Article Content */}
+                          <div className="p-4">
+                            <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-2 hover:text-blue-600 transition-colors cursor-pointer leading-tight">
+                              {article.title}
+                            </h3>
+
+                            {article.summary && (
+                              <p className="text-gray-600 text-sm mb-4 line-clamp-3 leading-relaxed">
+                                {article.summary}
+                              </p>
+                            )}
+
+                            {/* Metadata */}
+                            <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                              <div className="flex items-center space-x-1">
+                                <Globe className="h-3 w-3" />
+                                <span className="font-medium truncate">{article.source}</span>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <Calendar className="h-3 w-3" />
+                                <span className="truncate">{formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true })}</span>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-between">
+                              <button
+                                onClick={() => window.open(article.url, '_blank')}
+                                className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-medium"
+                              >
+                                <span>Read</span>
+                                <ExternalLink className="h-3 w-3" />
+                              </button>
+
+                              {/* Save Button */}
+                              {session && (
+                                <button
+                                  onClick={() => handleSaveToggle(article.id, !savedArticles.has(article.id))}
+                                  className={`p-1.5 transition-all ${
+                                    savedArticles.has(article.id)
+                                      ? 'text-amber-600 hover:text-amber-700' 
+                                      : 'text-gray-400 hover:text-gray-600'
+                                  }`}
+                                  title={savedArticles.has(article.id) ? 'Remove from saved' : 'Save article'}
+                                >
+                                  {savedArticles.has(article.id) ? (
+                                    <BookmarkCheck className="h-4 w-4" />
+                                  ) : (
+                                    <Bookmark className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Load More */}
                 {loadingMore && (
-                  <div className="flex justify-center items-center py-8">
-                    <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-6 flex items-center space-x-4">
-                      <div className="animate-spin h-8 w-8 border-3 border-blue-600 border-t-transparent rounded-full"></div>
-                      <div>
-                        <span className="font-semibold text-gray-900">Loading more articles...</span>
-                        <p className="text-gray-600 text-sm">Please wait</p>
-                      </div>
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center space-x-3 px-6 py-3 bg-white border border-gray-200">
+                      <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                      <span className="text-gray-600">Loading more articles...</span>
                     </div>
                   </div>
                 )}
-                
-                {/* End of articles message */}
+
                 {!hasMore && !loadingMore && filteredArticles.length > 0 && (
-                  <div className="text-center py-8">
-                    <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-8 max-w-md mx-auto">
-                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <div className="text-center py-12">
+                    <div className="max-w-md mx-auto">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Newspaper className="h-8 w-8 text-gray-400" />
                       </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-3">All caught up!</h3>
-                      <p className="text-gray-600 mb-6">You&apos;ve seen all available articles</p>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">You&apos;re all caught up!</h3>
+                      <p className="text-gray-600 mb-6">Check back later for more stories</p>
                       <button
                         onClick={handleRefresh}
-                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105"
+                        className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium"
                       >
-                        Refresh for more
+                        Refresh News
                       </button>
                     </div>
                   </div>
                 )}
               </>
             ) : (
-              <div className="text-center py-16">
-                <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-12 max-w-lg mx-auto">
-                  <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-8">
+              <div className="text-center py-20">
+                <div className="max-w-md mx-auto">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Newspaper className="h-10 w-10 text-gray-400" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                    {selectedCategory === 'all' 
-                      ? 'No articles found' 
-                      : `No ${categories.find(c => c.value === selectedCategory)?.label} articles found`
-                    }
-                  </h3>
-                  <p className="text-gray-600 mb-8 text-lg">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">No articles found</h3>
+                  <p className="text-gray-600 mb-8">
                     {selectedCategory === 'all'
                       ? 'Try refreshing to load the latest news'
-                      : 'Try a different category or refresh the page'
+                      : `No articles found in ${categories.find(c => c.value === selectedCategory)?.label}`
                     }
                   </p>
                   <button
                     onClick={handleRefresh}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                   >
                     Load News
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Collapsible Stats Panel - Bottom Right */}
-            <div className="fixed bottom-6 right-6 z-50">
-              <div className="bg-white/90 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 max-w-sm">
-                {/* Collapsible Header */}
-                <button
-                  onClick={() => setStatsCollapsed(!statsCollapsed)}
-                  className="w-full flex items-center justify-between p-5 hover:bg-white/50 transition-all duration-200 rounded-2xl"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full animate-pulse shadow-lg"></div>
-                      <span className="text-sm font-semibold text-gray-900">Live Feed</span>
-                    </div>
-                  </div>
-                  {statsCollapsed ? (
-                    <ChevronUp className="h-5 w-5 text-gray-500" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5 text-gray-500" />
-                  )}
-                </button>
-
-                {/* Collapsible Content */}
-                {!statsCollapsed && (
-                  <div className="px-5 pb-5 space-y-4 border-t border-gray-100/50">
-                    {/* Stats */}
-                    <div className="flex items-center space-x-3 text-gray-600 text-sm bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-xl p-4 border border-gray-100/50">
-                      <Clock className="h-4 w-4 text-blue-600" />
-                      <span>
-                        {enrichedArticles.length} article{enrichedArticles.length !== 1 ? 's' : ''} • 
-                        {articles.length > 0 
-                          ? ` Updated ${new Date(articles[0].scrapedAt).toLocaleTimeString()}`
-                          : ' Never updated'
-                        }
-                      </span>
-                    </div>
-                    
-                    {/* Controls */}
-                    {enrichedArticles.length > 0 && (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={selectAllArticles}
-                          className="px-4 py-2 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                        >
-                          Select All
-                        </button>
-                        {selectedArticles.size > 0 && (
-                          <button
-                            onClick={clearAllSelections}
-                            className="px-4 py-2 text-sm bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                          >
-                            Clear ({selectedArticles.size})
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Selected Articles Indicator */}
-                    {selectedArticles.size > 0 && (
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100/50">
-                        <p className="text-blue-700 font-semibold flex items-center space-x-2 text-sm">
-                          <MessageCircle className="h-4 w-4" />
-                          <span>{selectedArticles.size} selected for AI chat</span>
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         ) : (
           <ChatBot 
@@ -898,6 +836,17 @@ export default function NewsApp() {
           />
         )}
       </main>
+
+      {/* Floating Action Button for Selection */}
+      {selectedArticles.size > 0 && (
+        <button
+          onClick={() => setActiveTab('chat')}
+          className="fixed bottom-8 right-8 z-50 bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-110 transition-all"
+          title={`Analyze ${selectedArticles.size} selected articles`}
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+      )}
     </div>
   );
 }

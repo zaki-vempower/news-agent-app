@@ -15,10 +15,33 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
 }
 
-/* Custom utilities for news app */
+/* Modern typography */
+.headline-large {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.headline-medium {
+  font-size: clamp(1.25rem, 3vw, 1.875rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.headline-small {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Text clamping utilities */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -33,20 +56,161 @@ body {
   overflow: hidden;
 }
 
-/* Scrollbar styling */
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Modern card hover effects */
+.news-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.news-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Hero card special styling */
+.hero-card {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  transition: all 0.4s ease;
+}
+
+.hero-card:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(147, 51, 234, 0.08) 100%);
+  border-color: rgba(59, 130, 246, 0.2);
+  transform: translateY(-4px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+}
+
+/* Breaking news animation */
+@keyframes breaking-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.breaking-badge {
+  animation: breaking-pulse 2s ease-in-out infinite;
+}
+
+/* Modern scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f3f4f6;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 4px;
+  border: 2px solid #f3f4f6;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+/* Category badges */
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+
+.category-technology { background: #dbeafe; color: #1e40af; }
+.category-business { background: #dcfce7; color: #166534; }
+.category-politics { background: #fef3c7; color: #92400e; }
+.category-sports { background: #fce7f3; color: #be185d; }
+.category-health { background: #ecfdf5; color: #047857; }
+.category-science { background: #e0e7ff; color: #3730a3; }
+.category-environment { background: #f0fdf4; color: #15803d; }
+.category-economy { background: #fff7ed; color: #c2410c; }
+
+/* Grid system for news layout */
+.news-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.news-grid-hero {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 2fr 1fr;
+}
+
+@media (max-width: 1024px) {
+  .news-grid-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Loading states */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Floating action button */
+.fab {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 50;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+  transition: all 0.3s ease;
+}
+
+.fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 15px 35px rgba(99, 102, 241, 0.4);
+}
+
+/* Modern navigation */
+.nav-modern {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  .news-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .headline-large {
+    font-size: 1.5rem;
+  }
 }

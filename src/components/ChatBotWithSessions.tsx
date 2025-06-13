@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Bot, User, Loader, MessageCircle, Tag, Plus, X } from 'lucide-react';
+import { Send, Bot, User, Loader, MessageCircle, Tag, Plus, X, Search } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 
 interface NewsArticle {
@@ -236,7 +236,7 @@ What would you like to know?`;
     }
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (isWebSearch = false) => {
     if (!inputMessage.trim() || loading) return;
 
     const userMessage = inputMessage.trim();
@@ -260,7 +260,8 @@ What would you like to know?`;
         body: JSON.stringify({ 
           message: userMessage,
           selectedArticles: sessionSelectedArticles.length > 0 ? sessionSelectedArticles : undefined,
-          sessionId: activeSession?.id
+          sessionId: activeSession?.id,
+          isWebSearch // Include web search flag
         }),
       });
 
@@ -552,14 +553,27 @@ What would you like to know?`;
                 placeholder={
                   sessionSelectedArticles.length > 0 
                     ? `Ask about the ${sessionSelectedArticles.length} selected articles for this session...`
-                    : "Ask me about the news..."
+                    : "Ask me about the news or search the internet..."
                 }
                 className="flex-1 resize-none border border-gray-200 rounded-xl px-5 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 placeholder-gray-500 bg-white/80 backdrop-blur-sm shadow-sm"
                 rows={2}
                 disabled={loading}
               />
+              
+              {/* Internet Search Button */}
               <button
-                onClick={handleSendMessage}
+                onClick={() => handleSendMessage(true)}
+                disabled={!inputMessage.trim() || loading}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-3 rounded-xl hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all duration-200 flex items-center space-x-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transform hover:scale-105 disabled:transform-none"
+                title="Search Internet"
+              >
+                <Search className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Web</span>
+              </button>
+
+              {/* Regular Send Button */}
+              <button
+                onClick={() => handleSendMessage(false)}
                 disabled={!inputMessage.trim() || loading}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 flex items-center space-x-2 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 disabled:transform-none"
               >
@@ -567,6 +581,16 @@ What would you like to know?`;
                 <span className="hidden sm:inline">Send</span>
               </button>
             </div>
+            
+            {/* Help Text */}
+            <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+              <div className="flex items-center space-x-4">
+                <span>💬 Send: Chat with news articles</span>
+                <span>🌐 Web: Search internet for real-time info</span>
+              </div>
+              <span>Enter to send • Shift+Enter for new line</span>
+            </div>
+
             {sessionSelectedArticles.length > 0 && (
               <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl px-5 py-3 border border-blue-100">
                 <p className="text-sm text-blue-700 flex items-center">

@@ -10,58 +10,167 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+// SearXNG Search Service
+interface SearchResult {
+  title?: string;
+  url?: string;
+  content?: string;
+  snippet?: string;
+  engine?: string;
+}
+
+interface SearchResponse {
+  results?: SearchResult[];
+}
+
+export class SearXNGService {
+  private static baseUrl = 'http://localhost:4000';
+
+  static async search(query: string, category: string = 'general'): Promise<SearchResult[]> {
+    try {
+      const searchParams = new URLSearchParams({
+        q: query,
+        category: category,
+        format: 'json',
+        pageno: '1'
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(`${this.baseUrl}/search?${searchParams}`, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'NewsApp-Chatbot/1.0'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`SearXNG search failed: ${response.statusText}`);
+      }
+
+      const data = await response.json() as SearchResponse;
+      console.log('SearXNG search results:', data.results);
+      
+      return data.results || [];
+    } catch (error) {
+      console.error('SearXNG search error:', error);
+      return [];
+    }
+  }
+
+  static async searchWithContext(query: string): Promise<string> {
+    try {
+      const results = await this.search(query);
+      
+      if (results.length === 0) {
+        return "No search results found for this query.";
+      }
+
+      // Format results for context
+      const formattedResults = results.slice(0, 5).map((result, index) => {
+        return `**Search Result ${index + 1}:**
+Title: ${result.title || 'No title'}
+URL: ${result.url || 'No URL'}
+Content: ${result.content || result.snippet || 'No content available'}
+Engine: ${result.engine || 'Unknown'}
+
+---`;
+      }).join('\n');
+
+      return `## Internet Search Results for: "${query}"
+
+${formattedResults}
+
+*Search powered by SearXNG*`;
+    } catch (error) {
+      console.error('Error formatting search results:', error);
+      return "Error occurred while searching the internet.";
+    }
+  }
+}
+
 export class NewsChatbot {
-  static async generateResponse(userMessage: string, newsContext: string): Promise<string> {
+  static async generateResponse(userMessage: string, newsContext: string, isWebSearch: boolean = false): Promise<string> {
     try {
       if (!process.env.OPENAI_API_KEY) {
         return "I'm sorry, but the AI service is not configured. Please set up your OpenAI API key to use the chatbot feature.";
       }
 
-      const systemPrompt = `You are a sophisticated news analysis assistant with expertise in journalism, current events, and critical analysis. Your role is to provide comprehensive, detailed, and insightful responses about news articles.
+      let searchContext = '';
+      
+      // Only perform internet search if explicitly requested via the Web search button
+      if (isWebSearch) {
+        // Extract search query from user message
+        let searchQuery = userMessage.trim();
+        
+        // Remove common prefixes that might not be good for search
+        searchQuery = searchQuery.replace(/^(please|can you|could you|search|find|look up|tell me about|what is|what are)\s+/i, '').trim();
+        
+        if (searchQuery.length > 0) {
+          console.log(`Web search requested for: ${searchQuery}`);
+          searchContext = await SearXNGService.searchWithContext(searchQuery);
+        }
+      }
+
+      const systemPrompt = `You are a sophisticated news analysis assistant with expertise in journalism, current events, and critical analysis. Your role is to provide appropriate responses about news articles based on the user's specific request type.
 
       Available News Articles:
       ${newsContext}
 
-      CRITICAL INSTRUCTIONS - You MUST follow these for EVERY response:
-      
-      1. **DETAILED EXPLANATIONS REQUIRED**: When asked to "briefly explain" or "explain" articles, you must provide COMPREHENSIVE, DETAILED explanations of each article, NOT bullet points or summaries. Include:
-         - Full context and background of each story
-         - Detailed explanation of what happened and why it matters
-         - Key players, stakeholders, and their roles
-         - Historical context and precedent
-         - Immediate and long-term implications
-         
-      2. **MINIMUM LENGTH**: Every response must be 300-600 words minimum, with rich detail and analysis
-      
-      3. **STRUCTURE**: Use clear markdown sections (##) and organize information logically:
-         - ## Article Analysis for each article
-         - ## Key Implications
-         - ## Broader Context
-         - ## Future Outlook
-         
-      4. **DEPTH REQUIREMENTS**: 
-         - Explain WHY events matter, not just WHAT happened
-         - Discuss cause-and-effect relationships
-         - Analyze political, economic, social, and cultural implications
-         - Connect to broader trends and patterns
-         
-      5. **MULTIPLE PERSPECTIVES**: Present different viewpoints and stakeholder positions
-      
-      6. **EXPERT INSIGHTS**: Demonstrate deep subject matter expertise
-      
-      7. **NEVER** provide:
-         - Simple bullet point lists
-         - Brief summaries
-         - Surface-level descriptions
-         - One or two sentence explanations
-         
-      8. **ALWAYS** provide:
-         - Rich, detailed narrative explanations
-         - Comprehensive context and background
-         - Multiple paragraphs of analysis per topic
-         - Professional journalistic depth
+      ${searchContext ? `\nInternet Search Results:\n${searchContext}` : ''}
 
-      Remember: "Brief" means well-organized and focused, NOT short or superficial. Always provide detailed, comprehensive explanations with full context.`;
+      RESPONSE GUIDELINES - Adapt your response style based on the user's request:
+      
+      **FOR INTERNET SEARCH REQUESTS** (when user explicitly clicked the Web search button):
+      - Prioritize the search results to provide current, real-time information
+      - Combine search results with news context when relevant
+      - Clearly indicate when information comes from internet search vs local news articles
+      - Provide source URLs when available from search results
+      - Focus on answering the query with the most up-to-date information
+      
+      **FOR REGULAR CHAT** (when user used the Send button):
+      - Focus primarily on the available news articles
+      - Provide comprehensive analysis based on the news context
+      - Do not perform additional internet searches
+      - Use your knowledge to provide insights about the news articles
+      
+      **FOR ONE-LINER/QUICK RESPONSES** (when user asks for "in one line", "quickly", "TL;DR", "what's the gist"):
+      - Provide 1-2 sentences maximum
+      - Focus on the most essential point
+      - Be concise but accurate
+      
+      **FOR FACT-CHECKING** (when user asks "is this true?", "fact check", "verify", "confirm"):
+      - Start with clear TRUE/FALSE/PARTIALLY TRUE
+      - Provide specific evidence from the articles or search results
+      - Cite exact details that support or contradict the claim
+      - Keep focused on factual accuracy
+      
+      **FOR DETAILED ANALYSIS** (when user asks to "explain", "analyze", "tell me about", "discuss"):
+      - Provide comprehensive 300-600 word responses
+      - Include context, implications, and multiple perspectives
+      - Use clear markdown sections (##)
+      - Explain WHY events matter, not just WHAT happened
+      
+      **FOR SUMMARIES** (when user asks to "summarize", "overview", "brief me"):
+      - Provide 3-5 sentence summaries per article
+      - Include key points without excessive detail
+      - Maintain clarity and organization
+      
+      **FOR SPECIFIC QUESTIONS** (when user asks about specific details):
+      - Answer the exact question asked
+      - Provide relevant context as needed
+      - Match response length to question complexity
+      
+      ${isWebSearch ? 
+        '**IMPORTANT:** The user clicked the Web search button, so prioritize internet search results and provide real-time information.' : 
+        '**IMPORTANT:** The user used regular chat, so focus on the available news articles without additional internet searches.'
+      }
+      
+      Always be accurate, informative, and match your response style to what the user is actually requesting.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -69,8 +178,8 @@ export class NewsChatbot {
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage }
         ],
-        max_tokens: 1500, // Increased for longer responses with GPT-4o
-        temperature: 0.7, // Optimal for detailed analysis
+        max_tokens: 1500,
+        temperature: 0.7,
       });
 
       return completion.choices[0]?.message?.content || "I'm sorry, I couldn't process your request.";

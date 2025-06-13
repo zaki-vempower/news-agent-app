@@ -8,7 +8,7 @@ import { newsAPIService } from '@/lib/newsAPI';
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions) as { user?: { email?: string } } | null;
-    const { message, selectedArticles, sessionId } = await request.json();
+    const { message, selectedArticles, sessionId, isWebSearch } = await request.json();
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
@@ -139,8 +139,8 @@ export async function POST(request: NextRequest) {
       newsContext = NewsChatbot.formatNewsForContext(recentArticles);
     }
 
-    // Generate response
-    const response = await NewsChatbot.generateResponse(message, newsContext);
+    // Generate response with web search flag
+    const response = await NewsChatbot.generateResponse(message, newsContext, isWebSearch);
 
     // Save chat messages to database if we have a session
     if (chatSession) {
